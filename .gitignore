@@ -1,0 +1,18 @@
+# Built apps (rebuild with desktop/build_mac.sh or desktop/build_windows.bat)
+*.app/
+*.exe
+dist/
+build/
+*.spec
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS / Windows clutter
+.DS_Store
+Thumbs.db
+
+# Test exports
+*.csv

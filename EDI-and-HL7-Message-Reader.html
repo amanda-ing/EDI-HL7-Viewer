@@ -1,0 +1,3083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EDI and HL7 Message Reader</title>
+<style>
+:root{
+  --bg:#f4f6f8; --panel:#ffffff; --ink:#1a1f26; --muted:#5a6472; --line:#dce1e7; --soft:#f0f3f6;
+  --accent:#0a62c2; --accent-ink:#ffffff; --accent-soft:#e7f0fb;
+  --empty:#7d8794; --nullbg:#fff3d1; --nullink:#6e4a00; --absbg:#eef0f3;
+  --warnbg:#fdecec; --warnink:#9b1c1c; --okbg:#e6f5ea; --okink:#1c6332; --infobg:#eaf2fc; --infoink:#0b4a8f;
+  --hl:#ffe27a; --code:#f2f4f7; --unk:#8a5a00;
+  --f1:#0a62c2; --f2:#7c3aed; --f3:#0f766e; --f4:#b45309; --sep:#a0a8b3;
+  --z:#6d28d9;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --fs:17px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11151a; --panel:#1a2028; --ink:#e7ebf0; --muted:#9aa5b3; --line:#2c3541; --soft:#202833;
+    --accent:#5aa7ff; --accent-ink:#0b1520; --accent-soft:#1b2c42;
+    --empty:#8892a0; --nullbg:#3a2f12; --nullink:#ffd77a; --absbg:#232b36;
+    --warnbg:#3b1d1d; --warnink:#ffb4b4; --okbg:#173022; --okink:#9be3b1; --infobg:#18293d; --infoink:#a9cfff;
+    --hl:#6b5a12; --code:#212a35; --unk:#f5c26b;
+    --f1:#6cb2ff; --f2:#b794ff; --f3:#4fd1c5; --f4:#f6ad55; --sep:#5f6b7a; --z:#c4a5ff;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11151a; --panel:#1a2028; --ink:#e7ebf0; --muted:#9aa5b3; --line:#2c3541; --soft:#202833;
+  --accent:#5aa7ff; --accent-ink:#0b1520; --accent-soft:#1b2c42;
+  --empty:#8892a0; --nullbg:#3a2f12; --nullink:#ffd77a; --absbg:#232b36;
+  --warnbg:#3b1d1d; --warnink:#ffb4b4; --okbg:#173022; --okink:#9be3b1; --infobg:#18293d; --infoink:#a9cfff;
+  --hl:#6b5a12; --code:#212a35; --unk:#f5c26b;
+  --f1:#6cb2ff; --f2:#b794ff; --f3:#4fd1c5; --f4:#f6ad55; --sep:#5f6b7a; --z:#c4a5ff;
+}
+*{box-sizing:border-box}
+html{font-size:var(--fs)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.45}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Cascadia Mono","Courier New",monospace}
+header.top{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 16px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+header.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:0}
+h1{font-size:1.35rem;margin:0}
+.sub{color:var(--muted);font-size:.9rem}
+.spacer{flex:1}
+button,.btn{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button:focus-visible,summary:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+select,input[type=search]{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:7px 10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.input-panel{margin:16px auto;padding:14px}
+.input-panel h2{font-size:1rem;margin:0 0 8px}
+textarea{width:100%;min-height:150px;resize:vertical;font-size:.85rem;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--code);color:var(--ink)}
+textarea.drag{outline:3px dashed var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.input-panel .row{margin-top:10px}
+.privacy{font-size:.82rem;color:var(--muted)}
+.toolbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:12px}
+.toolbar .row{gap:10px}
+.toolbar label{font-size:.9rem;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.toolbar input[type=search]{min-width:200px;flex:1;max-width:420px}
+@media (max-height:700px){.toolbar{position:static}}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin:6px 0 0}
+.empty-state{padding:40px 16px;text-align:center;color:var(--muted)}
+.msgsep{margin:26px 0 10px;font-weight:700;font-size:1.05rem;display:flex;align-items:center;gap:10px}
+.msgsep::after{content:"";flex:1;height:1px;background:var(--line)}
+.summary{padding:16px;margin-bottom:12px}
+.summary h3{margin:0 0 4px;font-size:1.2rem}
+.summary .kind{display:inline-block;font-size:.75rem;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);margin-bottom:6px}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;margin-top:10px}
+.kv div{font-size:.92rem}
+.kv b{display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+.notice{border-radius:8px;padding:8px 12px;margin-top:10px;font-size:.9rem}
+.notice.warn{background:var(--warnbg);color:var(--warnink)}
+.notice.ok{background:var(--okbg);color:var(--okink)}
+.notice.info{background:var(--infobg);color:var(--infoink)}
+.notice ul{margin:4px 0 0;padding-left:20px}
+details.seg{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:8px 0;box-shadow:var(--shadow)}
+details.seg>summary{list-style:none;cursor:pointer;padding:10px 14px;display:block}
+details.seg>summary::-webkit-details-marker{display:none}
+.sh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.caret{width:1em;display:inline-block;transition:transform .15s;color:var(--muted)}
+details[open]>summary .caret{transform:rotate(90deg)}
+.segid{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:1px 8px;font-size:.95rem;min-width:3.4em;text-align:center}
+.segid.z{background:var(--z)}
+.segid.blank{background:var(--empty)}
+.segid.unknown{background:var(--muted)}
+.segname{font-weight:650;font-size:1.02rem}
+.chip{font-size:.75rem;background:var(--soft);border:1px solid var(--line);border-radius:99px;padding:1px 8px;color:var(--muted)}
+.chip.ctx{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip.warn{background:var(--warnbg);color:var(--warnink);border-color:transparent}
+.lineno{margin-left:auto;font-size:.8rem;color:var(--muted)}
+.segdesc{color:var(--muted);font-size:.9rem;margin:4px 0 0 1.6em}
+.raw{margin:8px 0 0 1.6em;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;background:var(--code);border-radius:6px;padding:6px 8px;word-break:break-all;white-space:pre-wrap;cursor:default}
+.raw .rid{font-weight:700}
+.raw .sep{color:var(--sep)}
+.raw [data-f]{border-radius:3px;cursor:pointer}
+.raw .c1{color:var(--f1)}
+.raw .c2{color:var(--f2)}
+.raw .c3{color:var(--f3)}
+.raw .c0{color:var(--f4)}
+.raw [data-f].lit,.r.lit td{background:var(--hl)}
+.body{padding:0 14px 12px}
+table.fields{width:100%;border-collapse:collapse;font-size:.92rem}
+table.fields th{text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:2px solid var(--line)}
+table.fields td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.pos{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;color:var(--muted);white-space:nowrap;width:7.5em}
+td.fname{width:32%}
+td.fname .nm{font-weight:600}
+.exp{font-size:.8rem;color:var(--muted)}
+.note{font-size:.8rem;color:var(--infoink);margin-top:2px}
+td.val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.88rem;word-break:break-word;white-space:pre-wrap;width:26%}
+td.mean{word-break:break-word}
+tr.l1 td.fname{padding-left:1.6em}
+tr.l2 td.fname{padding-left:3em}
+tr.l1 td.pos,tr.l2 td.pos{font-size:.76rem}
+tr.l1 .nm,tr.l2 .nm{font-weight:500}
+tr.l1 td,tr.l2 td{background:var(--soft)}
+tr.l1 .nm::before,tr.l2 .nm::before{content:"↳ ";color:var(--muted)}
+.pill{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:.8rem;border-radius:6px;padding:1px 8px}
+.pill.empty{color:var(--empty);background:var(--absbg)}
+.pill.null{background:var(--nullbg);color:var(--nullink);font-weight:600}
+.pill.absent{color:var(--empty);background:transparent;border:1px dashed var(--line)}
+.unk{color:var(--unk);font-style:italic}
+.tt{display:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.72rem;color:var(--muted);margin-left:4px}
+.tech .tt{display:inline}
+.hide-empty tr.st-empty,.hide-empty tr.st-absent{display:none}
+.nodata{color:var(--muted);font-style:italic;padding:8px 0}
+.hidden{display:none!important}
+mark{background:var(--hl);color:inherit;border-radius:2px}
+.help{margin:16px auto;padding:4px 14px}
+.help summary{cursor:pointer;font-weight:600;padding:8px 0}
+.help p,.help li{font-size:.92rem}
+.foot{color:var(--muted);font-size:.8rem;text-align:center;padding:24px 16px 40px}
+@media (max-width:760px){
+  table.fields thead{display:none}
+  table.fields tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}
+  table.fields td{display:block;border:0;width:auto!important;padding:2px 8px}
+  td.val::before{content:"Value: ";font-family:-apple-system,sans-serif;color:var(--muted);font-size:.8rem}
+  td.mean:not(:empty)::before{content:"Meaning: ";color:var(--muted);font-size:.8rem}
+  .lineno{margin-left:0}
+  .toolbar{position:static}
+}
+@media print{
+  header.top .row,.input-panel,.toolbar,.help,.foot{display:none!important}
+  body{background:#fff}
+  details.seg{break-inside:avoid;box-shadow:none}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div>
+      <h1>EDI and HL7 Message Reader</h1>
+      <div class="sub">HL7 v2 (RDE, RDS, RGV, RAS, OMP, ORM, ORU, ADT, DFT, SIU, MFN, ACK, plus vendor-defined types such as ZPM, USR and REQ) and X12 (850 PO, 855, 856 ASN, 810 invoice, 832, 997/999, claims)</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="row">
+      <button id="smaller" title="Make text smaller">A−</button>
+      <button id="bigger" title="Make text larger">A+</button>
+      <button id="theme" title="Switch light/dark">◐ Theme</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="panel input-panel">
+    <h2>1. Paste a message, open a file, or drop a file here</h2>
+    <textarea id="input" class="mono" spellcheck="false" placeholder="Paste an HL7 message (starts with MSH|) or an X12 / EDI file (starts with ISA*) here…"></textarea>
+    <div class="row">
+      <button class="primary" id="go">Explain this message</button>
+      <button id="open">📂 Open file…</button>
+      <input type="file" id="file" class="hidden" accept=".hl7,.txt,.edi,.x12,.dat,.msg,.850,.855,.856,.810,.997,.999,.832,.835,.837,*/*">
+      <select id="samples" aria-label="Load a sample message">
+        <option value="">Try a sample…</option>
+        <optgroup label="HL7">
+          <option value="rde">HL7 – Pharmacy order (RDE^O11)</option>
+          <option value="rds">HL7 – Pharmacy dispense (RDS^O13)</option>
+          <option value="ras">HL7 – Pharmacy administration (RAS^O17)</option>
+          <option value="dft">HL7 – Charges (DFT^P03)</option>
+          <option value="mfn">HL7 – Inventory item master update (MFN^M15)</option>
+          <option value="siu">HL7 – Appointment booked (SIU^S12)</option>
+          <option value="adt">HL7 – Patient admit (ADT^A01)</option>
+        </optgroup>
+        <optgroup label="X12 / EDI">
+          <option value="850">X12 850 – Purchase order</option>
+          <option value="855">X12 855 – PO acknowledgment</option>
+          <option value="856">X12 856 – Advance ship notice</option>
+          <option value="810">X12 810 – Invoice</option>
+          <option value="997">X12 997 – Functional acknowledgment</option>
+        </optgroup>
+      </select>
+      <button id="clear">Clear</button>
+      <span class="spacer"></span>
+      <span class="privacy">🔒 Works offline. Your data stays on this computer.</span>
+    </div>
+  </section>
+
+  <div id="toolbar" class="toolbar hidden">
+    <div class="row">
+      <input type="search" id="q" placeholder="Find a field or value (e.g. NDC, lot, patient name)…" aria-label="Search">
+      <label><input type="checkbox" id="showEmpty"> Show empty fields</label>
+      <label><input type="checkbox" id="showTech"> Show data types</label>
+      <button id="expand">Expand all</button>
+      <button id="collapse">Collapse all</button>
+      <button id="csv" title="Download a spreadsheet of every field">⬇ Spreadsheet (CSV)</button>
+      <button id="print">🖨 Print</button>
+    </div>
+  </div>
+
+  <div id="legendWrap" class="hidden">
+    <div class="legend" style="margin-bottom:10px">
+      <span><span class="pill empty">Empty</span> field was left blank</span>
+      <span><span class="pill null">""</span> sender is telling the receiver to <b>erase</b> the value</span>
+      <span><span class="pill absent">Not included</span> segment ended before this field</span>
+      <span class="unk">Italic orange</span>&nbsp;= code not in this app's built-in list
+    </div>
+  </div>
+  <main id="out" class="hide-empty">
+    <div class="empty-state">Paste a message above, or pick a sample, to see every segment and field explained in plain language.</div>
+  </main>
+
+  <details class="panel help">
+    <summary>How to read these messages (quick primer)</summary>
+    <p><b>Segment</b> – one line (or one record) of the message. It starts with a 2–3 letter code, like <span class="mono">PID</span> (patient) or <span class="mono">PO1</span> (purchase order line).</p>
+    <p><b>Field / Element</b> – one piece of data inside a segment. Its position is written like <span class="mono">PID-5</span> (HL7: 5th field of PID) or <span class="mono">PO1-03</span> (X12: 3rd element of PO1).</p>
+    <p><b>Component / Sub-component</b> – some fields hold several parts, e.g. a name is LAST<span class="mono">^</span>FIRST<span class="mono">^</span>MIDDLE. Parts are written <span class="mono">PID-5.1</span>, <span class="mono">PID-5.2</span>…</p>
+    <ul>
+      <li><b>HL7</b> usually uses <span class="mono">|</span> between fields, <span class="mono">^</span> between parts, <span class="mono">~</span> between repeats, <span class="mono">&amp;</span> between sub-parts and <span class="mono">\</span> for escape codes. The real characters are set in the MSH segment.</li>
+      <li><b>X12</b> usually uses <span class="mono">*</span> between elements, <span class="mono">~</span> at the end of each segment and <span class="mono">:</span> or <span class="mono">&gt;</span> between parts. The real characters are set in the ISA segment.</li>
+      <li>Two separators side by side (<span class="mono">||</span> or <span class="mono">**</span>) means that field was left empty.</li>
+      <li>In HL7, a value of <span class="mono">""</span> (two quote marks) is an explicit null. It tells the receiving system to <b>delete</b> whatever it has stored for that field.</li>
+      <li>Segments starting with <b>Z</b> (like ZRX) are custom segments defined by your facility or vendor. Ask your interface team for their meaning.</li>
+    </ul>
+    <p>Field names follow HL7 v2.5.1 and X12 004010/005010. Your trading partner's implementation guide can add to or change these meanings.</p>
+  </details>
+  <div class="foot" id="foot">EDI and HL7 Message Reader · single-file app · open it in Chrome, Edge, Safari or Firefox on Mac or Windows</div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const pad2 = n => String(n).padStart(2, "0");
+function tbl(s){ const o={}; s.split("|").forEach(p=>{ p=p.trim(); if(!p) return; const i=p.indexOf(" "); o[p.slice(0,i)]=p.slice(i+1); }); return o; }
+function defs(s){ return s.trim().split("\n").map(l=>{ const [name,type="ST",table="",note=""]=l.trim().split("|"); return {name,type,table,note}; }); }
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDT(s){
+  const m=/^(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(?:\.\d+)?([+-]\d{4})?$/.exec(s);
+  if(!m) return {text:"Doesn't look like a valid date/time (expected YYYYMMDDHHMMSS)", unk:true};
+  const [,y,mo,d,h,mi,se,z]=m;
+  if(mo && (+mo<1||+mo>12)) return {text:"Invalid month in date", unk:true};
+  if(d && (+d<1||+d>31)) return {text:"Invalid day in date", unk:true};
+  let out = mo ? `${MON[+mo-1]} ${d?(+d)+", ":""}${y}` : y;
+  if(h){ if(+h>23) return {text:"Invalid hour in time", unk:true}; out += " at "+fmtTime(h+(mi||"00")+(se||"")); }
+  if(z) out += ` (time zone UTC${z.slice(0,3)}:${z.slice(3)})`;
+  return out;
+}
+function fmtTime(t){
+  const m=/^(\d{2})(\d{2})(\d{2})?/.exec(t); if(!m) return t;
+  let h=+m[1]; const ap=h>=12?"PM":"AM"; const h12=h%12||12;
+  return `${h12}:${m[2]}${m[3]?":"+m[3]:""} ${ap}`;
+}
+function fmtX12Date(s){
+  if(/^\d{8}$/.test(s)) return fmtDT(s);
+  if(/^\d{6}$/.test(s)) return fmtDT("20"+s);
+  if(/^\d{8}-\d{8}$/.test(s)){ const [a,b]=s.split("-"); return `${fmtDT(a)} through ${fmtDT(b)}`; }
+  if(/^\d{12}$/.test(s)) return fmtDT(s);
+  return {text:"Doesn't look like a valid date (expected CCYYMMDD)", unk:true};
+}
+const money = n => isFinite(n) ? n.toLocaleString(undefined,{style:"currency",currency:"USD"}) : "";
+const mtext = m => m==null ? "" : (typeof m==="object" ? m.text : m);
+
+/* ============================================================
+   Code tables (shared lookup)
+   ============================================================ */
+const T = {
+  // ---------- HL7 ----------
+  sex: tbl("F Female|M Male|O Other|U Unknown|A Ambiguous|N Not applicable|X Non-binary"),
+  patClass: tbl("I Inpatient|O Outpatient|E Emergency|P Preadmit|R Recurring patient|B Obstetrics|C Commercial account|N Not applicable|U Unknown"),
+  admType: tbl("A Accident|E Emergency|L Labor and delivery|R Routine|N Newborn|U Urgent|C Elective"),
+  processing: tbl("P Production (live data)|T Training / test|D Debugging"),
+  ackType: tbl("AL Always send an acknowledgment|NE Never send an acknowledgment|ER Acknowledge only on error/reject|SU Acknowledge only on success"),
+  ackCode: tbl("AA Accepted (success)|AE Error – message had a problem|AR Rejected|CA Commit accept|CE Commit error|CR Commit reject"),
+  yn: tbl("Y Yes|N No"),
+  orderControl: tbl("NW New order|OK Order accepted|CA Cancel order request|CR Canceled as requested|DC Discontinue order request|DR Discontinued as requested|HD Hold order request|HR On hold as requested|RL Release previous hold|OR Released as requested|XO Change order request|XX Order changed as requested|RP Order replace request|RU Replaced unsolicited|RO Replacement order|SC Status changed|SN Send order number|NA Number assigned|RE Observations / results to follow|OC Order canceled|OD Order discontinued|OH Order held|UA Unable to accept order|UC Unable to cancel|UD Unable to discontinue|UX Unable to change|PA Parent order|CH Child order|RF Refill order request|AF Refill request approved|DF Refill request denied|FU Order refilled (unsolicited)|OF Order refilled as requested|DE Data errors|LI Link order|SR Response to status request|XR Changed as requested"),
+  orderStatus: tbl("A Some, but not all, results available|CA Order was canceled|CM Order is completed|DC Order was discontinued|ER Error – order not found|HD Order is on hold|IP In process (unspecified)|RP Order has been replaced|SC In process, scheduled"),
+  subst: tbl("N No substitution allowed|G Generic substitution allowed|T Therapeutic substitution allowed|0 No product selection indicated|1 Substitution not allowed by prescriber|2 Substitution allowed – patient requested product dispensed|3 Substitution allowed – pharmacist selected product dispensed|4 Substitution allowed – generic not in stock|5 Substitution allowed – brand dispensed as generic|7 Substitution not allowed – brand mandated by law|8 Substitution allowed – generic not available in marketplace"),
+  dispMethod: tbl("TR Traditional (patient-specific supply)|UD Unit dose|F Floor stock|AD Automated dispensing cabinet"),
+  rxOrderType: tbl("M Medication|S IV large-volume solution|O Other solution as medication order"),
+  route: tbl("AP Apply externally|B Buccal|DT Dental|EP Epidural|ET Endotracheal tube|GTT Gastrostomy tube|GU GU irrigant|IA Intra-arterial|IB Intrabursal|IC Intracardiac|ICV Intracervical|ID Intradermal|IH Inhalation|IHA Intrahepatic artery|IM Intramuscular|IMR Immerse (soak) body part|IN Intranasal|IO Intraocular|IP Intraperitoneal|IS Intrasynovial|IT Intrathecal|IU Intrauterine|IV Intravenous|MM Mucous membrane|MTH Mouth/throat|NG Nasogastric|NP Nasal prongs|NS Nasal|NT Nasotracheal tube|OP Ophthalmic|OT Otic|OTH Other/miscellaneous|PF Perfusion|PO Oral (by mouth)|PR Rectal|RM Rebreather mask|SC Subcutaneous|SD Soaked dressing|SL Sublingual|TD Transdermal|TL Translingual|TP Topical|TRA Tracheostomy|UR Urethral|VG Vaginal|VM Ventimask|WND Wound"),
+  valueType: tbl("AD Address|CE Coded entry|CF Coded element with formatted values|CK Composite ID with check digit|CN Composite ID and name|CP Composite price|CWE Coded with exceptions|CX Extended composite ID|DT Date|DTM Date/time|ED Encapsulated data (e.g., a PDF or image)|FT Formatted text|MO Money|NM Numeric|PN Person name|RP Reference pointer|SN Structured numeric|ST String (text)|TM Time|TN Telephone number|TS Time stamp|TX Text|XAD Extended address|XCN Extended person (clinician)|XON Organization name|XPN Person name|XTN Phone number"),
+  abnFlag: tbl("L Below low normal|H Above high normal|LL Below lower panic limit|HH Above upper panic limit|N Normal|A Abnormal|AA Very abnormal|< Below absolute low (off scale)|> Above absolute high (off scale)|S Susceptible|R Resistant|I Intermediate"),
+  obsStatus: tbl("F Final|P Preliminary|C Corrected (replaces a final result)|R Entered – not verified|I Specimen in lab, results pending|D Delete this result|X Result cannot be obtained|W Posted to wrong patient – wrong|S Partial"),
+  resultStatus: tbl("O Order received; specimen not yet received|I No results available; specimen received|S Scheduled|A Some results available|P Preliminary|C Correction to results|R Results stored; not yet verified|F Final results|X Results cannot be obtained|Y No order on record|Z No record of this patient"),
+  allergyType: tbl("DA Drug allergy|FA Food allergy|MA Miscellaneous allergy|MC Miscellaneous contraindication|EA Environmental allergy|AA Animal allergy|PA Plant allergy|LA Pollen allergy"),
+  allergySev: tbl("SV Severe|MO Moderate|MI Mild|U Unknown"),
+  nteSource: tbl("L Ancillary/filler department (e.g., pharmacy, lab)|P Orderer (placer)|O Other system"),
+  rxcType: tbl("A Additive (drug added to the base)|B Base (the solution/fluid)"),
+  completion: tbl("CP Complete|RE Refused|NA Not administered|PA Partially administered"),
+  actionCode: tbl("A Add|D Delete|U Update|X No change"),
+  priority: tbl("S STAT (immediately)|A ASAP|R Routine|P Pre-op|C Callback|T Timing critical|PRN As needed (PRN)"),
+  dgType: tbl("A Admitting diagnosis|W Working diagnosis|F Final diagnosis"),
+  ftType: tbl("CG Charge|CD Credit|PY Payment|AJ Adjustment"),
+  mfeEvent: tbl("MAD Add record|MDL Delete record|MUP Update record|MDC Deactivate (inactivate) record|MAC Reactivate record"),
+  mfiEvent: tbl("REP Replace the whole file|UPD Change file records as listed"),
+  marital: tbl("S Single|M Married|D Divorced|W Widowed|A Separated|P Domestic partner|U Unknown|T Unreported"),
+  relation: tbl("SEL Self|SPO Spouse|DOM Life partner|CHD Child|PAR Parent|SIB Sibling|GRD Guardian|EMC Emergency contact|EME Employee|EMR Employer|FND Friend|OTH Other|UNK Unknown|MTH Mother|FTH Father|BRO Brother|SIS Sister|GRP Grandparent"),
+  idType: tbl("MR Medical record number (MRN)|PI Patient internal identifier|PT Patient external identifier|AN Account number|PN Person number|SS Social Security number|DL Driver's license number|NPI National Provider Identifier (NPI)|DEA Drug Enforcement Administration (DEA) number|MD Medical license number|EI Employee number|PRN Provider number|NI National unique individual identifier|VN Visit number|MA Medicaid number|MC Medicare number|MB Member number|BR Birth registry number|SR State registry ID|U Unspecified identifier|FI Facility identifier|RRI Regional registry ID|NH Nursing home|PE Living subject enterprise number"),
+  nameType: tbl("L Legal name|D Display/customary name|A Alias|M Maiden name|B Name at birth|N Nickname|C Adopted name|P Name of partner/spouse|U Unspecified|S Coded pseudo-name"),
+  addrType: tbl("H Home|B Business|M Mailing|C Current or temporary|P Permanent|O Office|BA Bad address|BR Residence at birth|L Legal address|F Country of origin|N Birth (nee)"),
+  telUse: tbl("PRN Primary residence (home)|ORN Other residence|WPN Work|VHN Vacation home|ASN Answering service|EMR Emergency|NET Email / network address|BPN Beeper|PRS Personal"),
+  telEquip: tbl("PH Telephone|FX Fax|MD Modem|CP Cell phone|BP Beeper|Internet Internet / email address|X.400 X.400 email|TDD Telecommunications device for the deaf|TTY Teletypewriter"),
+  hl7ver: tbl("2.1 HL7 v2.1|2.2 HL7 v2.2|2.3 HL7 v2.3|2.3.1 HL7 v2.3.1|2.4 HL7 v2.4|2.5 HL7 v2.5|2.5.1 HL7 v2.5.1|2.6 HL7 v2.6|2.7 HL7 v2.7|2.7.1 HL7 v2.7.1|2.8 HL7 v2.8|2.8.1 HL7 v2.8.1|2.8.2 HL7 v2.8.2|2.9 HL7 v2.9"),
+  eventCode: tbl("A01 Admit / visit notification|A02 Transfer a patient|A03 Discharge / end visit|A04 Register a patient|A05 Pre-admit a patient|A06 Change outpatient to inpatient|A07 Change inpatient to outpatient|A08 Update patient information|A09 Patient departing – tracking|A10 Patient arriving – tracking|A11 Cancel admit|A12 Cancel transfer|A13 Cancel discharge|A17 Swap patients (beds)|A18 Merge patient information|A21 Patient goes on leave of absence|A22 Patient returns from leave of absence|A28 Add person information|A31 Update person information|A34 Merge patient ID only|A40 Merge patient – identifier list|A60 Update adverse reaction / allergy information|O01 Order message|O02 Order response|O03 Diet order|O04 Diet order acknowledgment|O09 Pharmacy/treatment order|O10 Pharmacy/treatment order acknowledgment|O11 Pharmacy/treatment encoded order|O12 Pharmacy encoded order acknowledgment|O13 Pharmacy/treatment dispense|O14 Pharmacy dispense acknowledgment|O15 Pharmacy/treatment give|O16 Pharmacy give acknowledgment|O17 Pharmacy/treatment administration|O18 Pharmacy administration acknowledgment|O21 Laboratory order|O25 Pharmacy/treatment refill authorization request|R01 Unsolicited observation result|M01 Master file not otherwise specified|M02 Staff/practitioner master file|M05 Patient location master file|M08 Test/observation (numeric) master file|M04 Charge description master file|M10 Test/observation batteries master file|M15 Inventory item master file|M16 Material item master file|P03 Post detail financial transaction|P11 Post detail financial transactions – expanded|P01 Add patient account|S12 New appointment booking|S13 Appointment rescheduling|S14 Appointment modification|S15 Appointment cancellation|S16 Appointment discontinuation|S17 Appointment deletion|S26 Patient did not show up for appointment|V04 Unsolicited vaccination record update|T02 Original document notification and content"),
+  segAction: tbl("A Add / insert|D Delete|U Update|X No change"),
+  apptStatus: tbl("Pending Pending|Waitlist On the wait list|Booked Booked (confirmed)|Started Started / patient arrived|Complete Complete|Cancelled Cancelled|Dc Discontinued|Deleted Deleted|Blocked Blocked (time not available)|Overbook Overbooked|Noshow Patient did not show up"),
+  allowSubst: tbl("Confirm Contact the placer before substituting|No Substitution not allowed|Notify Substitute, then notify the placer|Yes Substitution allowed"),
+  activeFlag: tbl("A Active|I Inactive"),
+  msgType: tbl("ADT Admit/Discharge/Transfer – patient demographics and movement|ACK General acknowledgment|ORM General order|ORR Order response|OML Laboratory order|ORU Observation result (lab, vitals, etc.)|RDE Pharmacy encoded order|RRE Pharmacy encoded order acknowledgment|RDS Pharmacy dispense|RRD Pharmacy dispense acknowledgment|RGV Pharmacy give|RRG Pharmacy give acknowledgment|RAS Pharmacy administration|RRA Pharmacy administration acknowledgment|OMP Pharmacy order|ORP Pharmacy order response|RDE Pharmacy encoded order|MFN Master file notification (e.g., formulary or item master)|MFK Master file acknowledgment|DFT Detailed financial transaction (charges)|BAR Billing account record|SIU Scheduling information|VXU Vaccination record update|MDM Medical document management|QBP Query by parameter|RSP Query response|OMS Stock requisition order|ORS Stock requisition order acknowledgment|OMN Non-stock requisition order|ORD Dietary order response in the HL7 standard – some vendors also use ORD for their own order messages (see your interface specification)|REQ Vendor-defined message type, often a requisition – not part of the HL7 standard (see your interface specification)|USR Vendor-defined message type – not part of the HL7 standard (see your interface specification)"),
+  codeSys: tbl("NDC National Drug Code (NDC)|RXNORM RxNorm|RXN RxNorm|LN LOINC (lab/observation codes)|SCT SNOMED CT|SNM SNOMED|I10 ICD-10-CM diagnosis code|I10C ICD-10-CM diagnosis code|I10P ICD-10-PCS procedure code|I9 ICD-9 code|I9C ICD-9-CM code|C4 CPT-4 procedure code|CPT CPT procedure code|HCPCS HCPCS code|HCPC HCPCS code|CVX CDC vaccine code (CVX)|MVX CDC vaccine manufacturer code (MVX)|UCUM UCUM units of measure|ISO+ ISO units of measure|ANS+ ANSI units of measure|CDCREC CDC race & ethnicity codes|NDDF First Databank NDDF|FDB First Databank|MMSL Multum|GPI Medi-Span GPI|UPC Universal Product Code|GTIN Global Trade Item Number|L Local code (facility-specific)|99zzz Local code (facility-specific)|ISO3166 ISO country code|HL70162 HL7 table 0162 – route|HL70163 HL7 table 0163 – body site|HL70063 HL7 table 0063 – relationship|HL70002 HL7 table 0002 – marital status|HL70005 HL7 table 0005 – race|HL70189 HL7 table 0189 – ethnicity"),
+  freq: v => {
+    const k=v.toUpperCase().replace(/\s/g,"");
+    const fixed={QD:"Once a day",DAILY:"Once a day",QDAY:"Once a day",BID:"Twice a day",TID:"Three times a day",QID:"Four times a day",QAM:"Every morning",QPM:"Every evening",QHS:"At bedtime",HS:"At bedtime",QOD:"Every other day",PRN:"As needed",ONCE:"One time only",STAT:"Immediately (STAT)",NOW:"Now",QWK:"Once a week",WEEKLY:"Once a week",AC:"Before meals",PC:"After meals",CONT:"Continuous",CONTINUOUS:"Continuous",Q1H:"Every hour"};
+    if(fixed[k]) return fixed[k];
+    let m=/^Q(\d+)H$/.exec(k); if(m) return `Every ${m[1]} hours`;
+    m=/^Q(\d+)M(IN)?$/.exec(k); if(m) return `Every ${m[1]} minutes`;
+    m=/^Q(\d+)D$/.exec(k); if(m) return `Every ${m[1]} days`;
+    m=/^Q(\d+)W$/.exec(k); if(m) return `Every ${m[1]} weeks`;
+    m=/^Q(\d+)H?PRN$/.exec(k); if(m) return `Every ${m[1]} hours as needed`;
+    return null;
+  },
+  // ---------- X12 ----------
+  isa01: tbl("00 No authorization information present|03 Additional data identification"),
+  isa03: tbl("00 No security information present|01 Password"),
+  isaQual: tbl("01 DUNS number (Dun & Bradstreet)|08 UCC EDI communications ID|12 Phone number|14 DUNS + suffix|16 DUNS + 4-character suffix|20 Health Industry Number (HIN)|27 Carrier ID (Medicare)|28 Fiscal intermediary ID|29 Medicare provider ID|30 U.S. Federal Tax ID|33 NAIC company code|ZZ Mutually defined (agreed between partners)"),
+  isa14: tbl("0 No interchange acknowledgment (TA1) requested|1 Interchange acknowledgment (TA1) requested"),
+  isa15: tbl("P Production (live data)|T Test data|I Information"),
+  isa12: tbl("00401 X12 version 4010|00501 X12 version 5010|00400 X12 version 4000|00403 X12 version 4030|00305 X12 version 3050|00306 X12 version 3060|00307 X12 version 3070"),
+  gs01: tbl("PO Purchase order (850)|PR Purchase order acknowledgment (855)|PC Purchase order change (860)|CA Purchase order change acknowledgment (865)|SH Ship notice / manifest – ASN (856)|IN Invoice (810)|SC Price / sales catalog (832)|IB Inventory inquiry/advice (846)|PT Product transfer and resale report (867)|AG Application advice (824)|RA Payment order / remittance advice (820)|FA Functional acknowledgment (997/999)|HC Health care claim (837)|HP Health care claim payment/advice (835)|HS Eligibility inquiry (270)|HB Eligibility response (271)|HR Claim status request (276)|HN Claim status response (277)|HI Health care services review (278)|BE Benefit enrollment (834)|RS Order status report (870)|PD Product activity data (852)"),
+  gs07: tbl("X Accredited Standards Committee X12|T Transportation Data Coordinating Committee"),
+  txnSet: tbl("810 Invoice|820 Payment order / remittance advice|824 Application advice|832 Price / sales catalog|844 Product transfer account adjustment (chargeback request)|845 Price authorization acknowledgment / status (contract pricing)|846 Inventory inquiry / advice|849 Response to product transfer account adjustment (chargeback response)|850 Purchase order|852 Product activity data|855 Purchase order acknowledgment|856 Ship notice / manifest (ASN)|860 Purchase order change request|865 Purchase order change acknowledgment|867 Product transfer and resale report|869 Order status inquiry|870 Order status report|940 Warehouse shipping order|945 Warehouse shipping advice|997 Functional acknowledgment|999 Implementation acknowledgment|270 Eligibility inquiry|271 Eligibility response|276 Claim status request|277 Claim status response|278 Prior authorization / referral|834 Benefit enrollment|835 Claim payment / remittance advice|837 Health care claim"),
+  purpose: tbl("00 Original|01 Cancellation|04 Change|05 Replace|06 Confirmation|07 Duplicate|13 Request|18 Reissue|22 Information copy|25 Incremental|26 Replace – each transaction set (complete replacement)"),
+  poType: tbl("SA Stand-alone order|NE New order|BK Blanket order (quantity firm)|BE Blanket order / estimated quantities|DS Drop ship|RL Release or delivery order|CN Consigned order|RE Reorder|RO Rush order|EO Emergency order|OS Special order|CF Confirmation|KN Purchase order|PR Promotion information|SP Sample"),
+  bak02: tbl("AC Acknowledge – with detail and change|AD Acknowledge – with detail, no change|AE Acknowledge – with exception detail only|AK Acknowledge – no detail or change|AP Acknowledge – product replenishment|AT Accepted|NA No acknowledgment needed|RD Reject with detail|RF Reject with exception detail only|RJ Rejected – no detail|RO Rejected with counter offer|ZZ Mutually defined"),
+  ack01: tbl("AC Item accepted and shipped|AR Item accepted and released for shipment|BP Item accepted – partial shipment, balance backordered|DR Item accepted – date rescheduled|IA Item accepted|IB Item backordered|IC Item accepted – changes made|ID Item deleted|IF Item on hold – incomplete description|IH Item on hold|IP Item accepted – price changed|IQ Item accepted – quantity changed|IR Item rejected|IS Item accepted – substitution made|IW Item on hold – waiver required|R1 Item rejected – not a contract item|R2 Item rejected – invalid item/product number|R3 Item rejected – invalid unit of issue|R4 Item rejected – contract item not available|SP Item accepted – schedule date pending|CC Shipment complete on date|CP Partial shipment|IE Item accepted – price pending"),
+  uom: tbl("EA Each|BX Box|CA Case|CS Case (common non-standard code)|PK Package|CT Carton|DZ Dozen|PR Pair|KT Kit|BG Bag|BO Bottle|VI Vial|AM Ampoule|RL Roll|ST Set|SY Syringe|TU Tube|PL Pallet|PC Piece|SH Sheet|GA Gallon|LB Pound|KG Kilogram|ML Milliliter|LT Liter|GR Gram|ME Milligram|OZ Ounce (weight)|FO Fluid ounce|UN Unit|MJ Minutes|DA Days|CX Can|JR Jar|PD Pad|TK Tank|DS Dose|AV Capsule|TB Tube|EC Each per month|HU Hundred|TH Thousand|FT Foot|IN Inch|YD Yard|SF Square foot|PH Pack (PAK)|BD Bundle|BA Barrel|CN Can|DR Drum|SA Sack|PT Pint|QT Quart|GL Gallon (alt)|CM Centimeter|MM Millimeter|M4 Monetary value|01 Actual pounds"),
+  priceBasis: tbl("CA Catalog price|CT Contract price|PE Price per each|QT Quoted price|UM Price per unit of measure|CP Current price (subject to change)|NC No charge|SR Suggested retail|TE Contract price per each|NT Indicates a net unit price|PP Price per package|HP Price per hundred|TP Price per thousand"),
+  prodQual: tbl("VC Vendor's (seller's) catalog number|VN Vendor's item number|VP Vendor's part number|VA Vendor's style number|BP Buyer's part number|IN Buyer's item number|PI Purchaser's item code|CB Buyer's catalog number|MG Manufacturer's part number|MF Manufacturer|MN Model number|N4 National Drug Code (NDC) in 5-4-2 format|ND National Drug Code (NDC)|N1 NDC in 4-4-2 format|N2 NDC in 5-3-2 format|N3 NDC in 5-4-1 format|UP UPC consumer package code (1-5-5-1)|UI UPC (1-5-5)|UK GTIN-14 (UCC/EAN-14 shipping container code)|EN EAN/UCC-13|EO EAN/UCC-8|HI HIBC (Health Industry Bar Code) supplier labeling|LT Lot number|SN Serial number|PD Part number description|CH Country of origin|SK Stock keeping unit (SKU)|ZZ Mutually defined|HC HCPCS / CPT procedure code|NU NUBC revenue code|ER Jurisdiction specific code|UD UPC/EAN case code (2-5-5)|A2 Department of Defense NSN|FS National Stock Number (NSN)|CG Commodity grouping|KP Kit prefix|PN Company part number|SW Stock number|SV Service rendered"),
+  procQual: tbl("HC HCPCS / CPT procedure code|N4 National Drug Code (NDC) in 5-4-2 format|NU NUBC revenue code|ER Jurisdiction specific procedure code|IV Home infusion EDI coalition (HIEC) code|WK Advanced billing concepts (ABC) code|AD American Dental Association code"),
+  refQual: tbl("PO Purchase order number|VN Vendor order number|IA Internal vendor number (your account # with the vendor)|IT Internal customer number|IV Seller's invoice number|CO Customer order number|CT Contract number|DP Department number|BM Bill of lading number|CN Carrier's reference number (PRO number)|PK Packing list number|AN Associated purchase orders|ZZ Mutually defined|11 Account number|12 Billing account|19 Division identifier|AH Agreement number|DD Document identification code|PD Promotion / deal number|LT Lot number|SI Shipper's identifying number for shipment (SID)|SN Seal number|CR Customer reference number|EI Employer's identification number|D9 Claim number|F8 Original reference number|G1 Prior authorization number|9F Referral number|EA Medical record identification number|6P Group number|1L Group or policy number|BL Government bill of lading|CA Cost allocation reference|06 System number|RQ Purchase requisition number|RE Release number|AE Authorization for expense (AFE) number|AP Accounts receivable customer account|TN Transaction reference number|EV Receiver identification number|2U Payer identification number|SY Social Security number|0F Subscriber number|1W Member identification number|9A Repriced claim reference number|EO Submitter identification number|TJ Federal taxpayer's identification number|HPI Health care provider NPI|XX1 Special program code|HMB Health Industry Number (HIN)"),
+  dtmQual: tbl("002 Delivery requested|003 Invoice|004 Purchase order|007 Effective|008 Purchase order received|009 Process|010 Requested ship|011 Shipped|017 Estimated delivery|035 Delivered|036 Expiration (e.g., product expiry)|037 Ship not before|038 Ship no later|050 Received|063 Do not deliver after|064 Do not deliver before|067 Current schedule delivery|068 Current schedule ship|069 Promised for delivery|094 Manufacture|097 Transaction creation|106 Required by|118 Requested pick-up|150 Service period start|151 Service period end|196 Start|197 End|232 Claim statement period start|233 Claim statement period end|405 Production|472 Service|573 Date claim paid|036 Expiration|AA1 Estimated arrival|405 Production"),
+  dtmFmt: tbl("D8 Date (CCYYMMDD)|RD8 Range of dates (CCYYMMDD-CCYYMMDD)|DT Date and time (CCYYMMDDHHMM)|D6 Date (YYMMDD)|TM Time (HHMM)"),
+  entity: tbl("ST Ship to|BT Bill to party|BY Buying party (purchaser)|VN Vendor|SE Selling party|SF Ship from|SU Supplier / manufacturer|RI Remit to|MF Manufacturer of goods|CA Carrier|BS Bill and ship to|DA Delivery address|OB Ordered by|PR Payer|PE Payee|II Issuer of invoice|RE Party to receive commercial invoice remittance|40 Receiver|41 Submitter|85 Billing provider|87 Pay-to provider|IL Insured or subscriber|QC Patient|82 Rendering provider|77 Service facility location|DN Referring provider|DK Ordering physician|PW Pickup address|WH Warehouse|Z7 Mark-for party|1P Provider|2B Third-party administrator|FR Message from|TO Message to|DS Distributor|DB Distributor branch|MA Party for whom item is ultimately intended|LW Customer for whom same or similar work was performed|EN End user|SO Sold to (if different from bill to)|SJ Service provider|N8 Contract holder|PO Party to receive invoice for goods or services|71 Attending physician|72 Operating physician|DQ Supervising physician|P3 Primary care provider|HK Subscriber|IA Installed at|ML Military|OT Origin terminal|NP Notify party"),
+  idQual: tbl("1 D-U-N-S number (Dun & Bradstreet)|9 D-U-N-S+4|2 Standard Carrier Alpha Code (SCAC)|11 Drug Enforcement Administration (DEA) number|21 Health Industry Number (HIN)|24 Employer's identification number (EIN)|34 Social Security number|46 Electronic transmitter identification number (ETIN)|91 Assigned by seller or seller's agent|92 Assigned by buyer or buyer's agent|UL Global Location Number (GLN)|XX National Provider Identifier (NPI)|FI Federal taxpayer's identification number|MI Member identification number|PI Payer identification|II Standard unique health identifier|SV Service provider number|ZZ Mutually defined|10 Department of Defense Activity Address Code (DODAAC)|15 Standard Address Number (SAN)"),
+  hlLevel: tbl("S Shipment|O Order|T Shipping tare (pallet)|P Pack (carton/case)|I Item|F Component|20 Information source (payer/billing)|21 Information receiver|22 Subscriber|23 Dependent|19 Provider of service|PT Patient"),
+  hlChild: tbl("0 No lower-level (child) HL segments follow|1 Lower-level (child) HL segments follow"),
+  bsn05: tbl("0001 Shipment, order, packaging, item (SOPI)|0002 Shipment, order, item, packaging (SOIP)|0004 Shipment, order, item (SOI)|0005 Shipment, packaging, order, item|0003 Shipment, order, item packaging"),
+  transMethod: tbl("M Motor (common carrier)|U Private parcel service (e.g., UPS, FedEx)|A Air|AE Air express|H Customer pickup|L Contract carrier|R Rail|P Private carrier|X Intermodal|D Parcel post|LT Less than trailer load (LTL)|ZZ Mutually defined|BU Bus|C Consolidation|E Expedited truck|T Best way (shipper's option)"),
+  manQual: tbl("GM SSCC-18 serial shipping container code (case/pallet label)|CP Carrier-assigned package ID (tracking number)|UC U.P.C. shipping container code|AA SSCC-18 (older code)|ZZ Mutually defined"),
+  perFunc: tbl("BD Buyer name or department|IC Information contact|OC Order contact|DC Delivery contact|SR Sales representative or department|AR Accounts receivable department|CN General contact|EB Entered by|BL Technical department|AP Accounts payable department|CR Customer relations|RE Receiving contact"),
+  commQual: tbl("TE Telephone|FX Fax|EM Email|EX Telephone extension|UR Website (URL)|CP Cellular phone"),
+  amtQual: tbl("TT Total transaction amount|1 Line item total|GV Gross value|N Net|TX Tax|F7 Sales tax|D Payor amount paid|EAF Amount owed|AU Coverage amount"),
+  ak5: tbl("A Accepted|E Accepted, but errors were noted|M Rejected – message authentication failed|P Partially accepted – at least one transaction set was rejected|R Rejected|W Rejected – failed validity tests|X Rejected – content could not be analyzed"),
+  ak304: tbl("1 Unrecognized segment ID|2 Unexpected segment|3 Required segment missing|4 Loop occurs over maximum times|5 Segment exceeds maximum use|6 Segment not in defined transaction set|7 Segment not in proper sequence|8 Segment has data element errors|I4 Implementation 'not used' segment present|I6 Implementation dependent segment missing|I7 Implementation loop occurs under minimum times|I8 Implementation segment below minimum use|I9 Implementation dependent 'not used' segment present"),
+  ak403: tbl("1 Required data element missing|2 Conditional required data element missing|3 Too many data elements|4 Data element too short|5 Data element too long|6 Invalid character in data element|7 Invalid code value|8 Invalid date|9 Invalid time|10 Exclusion condition violated|12 Too many repetitions|13 Too many components|I10 Implementation 'not used' data element present|I11 Implementation too few repetitions|I12 Implementation pattern match failure|I13 Implementation dependent 'not used' data element present|I6 Code value not used in implementation|I9 Implementation dependent data element missing"),
+  ak502: tbl("1 Transaction set not supported|2 Transaction set trailer (SE) missing|3 Control number in ST and SE do not match|4 Number of included segments does not match actual count|5 One or more segments in error|6 Missing or invalid transaction set identifier|7 Missing or invalid transaction set control number|23 Control number not unique within the group|I5 Implementation – one or more segments in error|I6 Implementation convention not supported"),
+  ak9err: tbl("1 Functional group not supported|2 Functional group version not supported|3 Functional group trailer (GE) missing|4 Group control number in GS and GE do not match|5 Number of included transaction sets does not match actual count|6 Group control number violates syntax|10 Authentication key name unknown|18 Unknown security recipient|19 Unknown security originator|23 Transaction set control number not unique within the group|24 S3E security end segment missing|25 S3E security end segment missing for S3S"),
+  ta104: tbl("A Accepted – no errors|E Accepted with errors noted|R Rejected"),
+  qtyQual: tbl("33 Quantity available for sale (stock quantity)|17 Quantity on hand|01 Discrete quantity|02 Cumulative quantity|63 On order quantity|38 Original quantity|90 Acknowledged quantity|QA Quantity approved"),
+  sacInd: tbl("A Allowance (a credit/discount)|C Charge (an added cost)|N No allowance or charge"),
+  sacCode: tbl("D240 Freight|D500 Handling|C310 Discount|H850 Tax|G830 Shipping and handling|D980 Insurance|F050 Other (see description)|B840 Customer account identification|I530 Rebate|A260 Advertising allowance|C000 Defective allowance|F155 Fuel charge|D170 Free goods"),
+  ctpPrice: tbl("CON Contract price|CAT Catalog price|WHL Wholesale price|RES Resale price|DIS Distributor's price|MSR Manufacturer's suggested retail|NET Net item price|INV Invoice price|PRP Promotional price|QTE Quote price|SLP Selling price|ACT Actual price|UCP Unit cost price"),
+  pidType: tbl("F Free-form description|S Structured (from an industry code list)|X Semi-structured (code plus text)"),
+  clp02: tbl("1 Processed as primary|2 Processed as secondary|3 Processed as tertiary|4 Denied|19 Processed as primary, forwarded to additional payer(s)|20 Processed as secondary, forwarded|21 Processed as tertiary, forwarded|22 Reversal of previous payment|23 Not our claim, forwarded to additional payer(s)|25 Predetermination pricing only – no payment"),
+  casGroup: tbl("CO Contractual obligation|CR Correction and reversal|OA Other adjustment|PI Payer initiated reduction|PR Patient responsibility"),
+  nm102: tbl("1 Person|2 Non-person entity (organization)"),
+  gender: tbl("F Female|M Male|U Unknown"),
+  bpr04: tbl("ACH Automated Clearing House (electronic)|CHK Check|NON Non-payment data|BOP Financial institution option|FWT Federal Reserve funds/wire transfer"),
+  big07: tbl("CR Credit memo|DI Debit invoice|DR Debit memo|FD Final invoice|PR Product (or service)"),
+  fob01: tbl("CC Collect (buyer pays freight)|PP Prepaid by seller|PB Customer pickup / backhaul|PC Prepaid but charged to customer|DF Defined by buyer and seller|PO Prepaid only|PU Pickup|PS Paid by seller"),
+  dxQual: tbl("ABK ICD-10-CM principal diagnosis|ABF ICD-10-CM diagnosis|ABJ ICD-10-CM admitting diagnosis|APR ICD-10-CM patient's reason for visit|ABN ICD-10-CM external cause of injury|BK ICD-9-CM principal diagnosis|BF ICD-9-CM diagnosis|BBR ICD-10-PCS principal procedure|BBQ ICD-10-PCS other procedure|BE Value code|BG Condition code|BH Occurrence code|BI Occurrence span code|DR Diagnosis related group (DRG)"),
+  pos: tbl("01 Pharmacy|02 Telehealth (not in patient's home)|10 Telehealth in patient's home|11 Office|12 Home|19 Off-campus outpatient hospital|20 Urgent care facility|21 Inpatient hospital|22 On-campus outpatient hospital|23 Emergency room – hospital|24 Ambulatory surgical center|31 Skilled nursing facility|32 Nursing facility|34 Hospice|41 Ambulance – land|49 Independent clinic|50 Federally qualified health center|61 Comprehensive inpatient rehabilitation|81 Independent laboratory|99 Other place of service"),
+  freqType: tbl("1 Original claim|7 Replacement of a prior claim|8 Void / cancel of a prior claim"),
+  sbr01: tbl("P Primary|S Secondary|T Tertiary|A Payer responsibility four|U Unknown"),
+  indRel: tbl("18 Self|01 Spouse|19 Child|20 Employee|21 Unknown|39 Organ donor|40 Cadaver donor|53 Life partner|G8 Other relationship"),
+  bct01: tbl("PC Price catalog|SC Sales catalog|CP Contract pricing"),
+  yesno: tbl("Y Yes|N No|W Not applicable"),
+  td1pkg: v => { const m=/^([A-Z]{3})(\d{2})?$/.exec(v); const k={CTN:"Carton",BOX:"Box",CAS:"Case",PLT:"Pallet",BAG:"Bag",PKG:"Package",ENV:"Envelope",TOT:"Tote",DRM:"Drum",BDL:"Bundle",SKD:"Skid",CRT:"Crate",ROL:"Roll",PCS:"Pieces"}; if(!m||!k[m[1]]) return null; const mat={"01":"aluminum","25":"corrugated or solid (cardboard)","31":"fibre","58":"metal","71":"plastic","76":"paper","79":"plastic","94":"wood","90":"standard"}; return k[m[1]]+(m[2]?` (${mat[m[2]]||"material code "+m[2]})`:""); },
+  wtQual: tbl("G Gross weight|N Net weight|A Consolidated weight|E Estimated net weight"),
+};
+// strip placeholder entries like "DC? -"
+for(const k in T){ const t=T[k]; if(typeof t==="object") for(const c in t){ if(c.endsWith("?")||t[c]==="-") delete t[c]; } }
+
+function lookup(table, code){
+  if(!table||code==="") return "";
+  const t=T[table]; if(!t) return "";
+  let r = typeof t==="function" ? t(code) : (t[code] ?? t[code.toUpperCase()] ?? t[code.trim()]);
+  if(r==null && table==="codeSys"){
+    if(/^HL7\d{4}$/i.test(code)) r=`HL7 table ${code.slice(3)}`;
+    else if(/^99/.test(code)) r="Local code system (facility-specific)";
+  }
+  if(r==null && table==="msgType" && /^Z/i.test(code)) r="Custom (Z) message type – defined by the vendor or site, not part of the HL7 standard (see your interface specification)";
+  if(r==null && table==="eventCode" && /^Z/i.test(code)) r="Custom (Z) trigger event – defined by the vendor or site";
+  if(r==null && table==="isa12" && /^\d{5}$/.test(code)) r=`X12 version ${code.slice(1,4)}`;
+  if(r==null) return {text:`"${code}" is not in this app's built-in list (it may be specific to your facility, vendor, or trading partner)`, unk:true};
+  return r;
+}
+
+/* ============================================================
+   HL7 dictionary
+   ============================================================ */
+const HL7_TYPE_HELP = {
+  ST:"Text", TX:"Text (can be long)", FT:"Formatted text (\\.br\\ = new line)", NM:"A number", SI:"Sequence number – 1 for the first of these segments, 2 for the next, etc.",
+  ID:"A code from an HL7 standard list", IS:"A code from a list your facility or vendor defines", DT:"Date as YYYYMMDD (e.g., 20261027)",
+  DTM:"Date & time as YYYYMMDDHHMMSS (seconds and time zone optional)", TS:"Date & time as YYYYMMDDHHMMSS (seconds and time zone optional)", TM:"Time as HHMM or HHMMSS",
+  CE:"Coded value: code ^ description ^ code system", CWE:"Coded value: code ^ description ^ code system", CNE:"Coded value: code ^ description ^ code system",
+  XPN:"Person name: LAST ^ FIRST ^ MIDDLE ^ SUFFIX ^ PREFIX ^ DEGREE", FN:"Family (last) name",
+  XCN:"Person (usually a clinician): ID ^ LAST ^ FIRST ^ MIDDLE ^ SUFFIX ^ PREFIX ^ DEGREE…",
+  CX:"Identifier: ID number ^ check digit ^ scheme ^ assigning authority ^ ID type", XAD:"Address: street ^ other ^ city ^ state ^ zip ^ country ^ address type",
+  XTN:"Phone or email: (old format) ^ use ^ equipment ^ email ^ country ^ area code ^ number ^ extension", PL:"Location: unit ^ room ^ bed ^ facility ^ status ^ type ^ building ^ floor",
+  HD:"System or organization name: short name ^ universal ID ^ ID type", EI:"An identifier (e.g., order number) ^ who assigned it", EIP:"Placer order ID ^ filler order ID",
+  MSG:"Message type ^ trigger event ^ message structure", PT:"Processing ID ^ processing mode", VID:"HL7 version number", CQ:"Quantity ^ units", TQ:"Timing: quantity ^ frequency ^ duration ^ start ^ end ^ priority ^ condition ^ text…",
+  RI:"Frequency ^ explicit times", MO:"Amount ^ currency", CP:"Price ^ price type ^ range…", DLN:"License number ^ state ^ expiration date", FC:"Financial class ^ effective date",
+  DR:"Start date/time ^ end date/time", XON:"Organization: name ^ type ^ ID ^ …", LA1:"Location: unit ^ room ^ bed ^ facility ^ …", LA2:"Location/address: unit ^ room ^ bed ^ facility ^ … ^ street ^ city ^ state ^ zip",
+  VARIES:"Depends on the value-type field (OBX-2)", RPT:"Repeat pattern (timing)", ELD:"Error location and code", ERL:"Error location: segment ^ sequence ^ field ^ repetition ^ component", AUI:"Authorization number ^ date ^ source",
+  SPS:"Specimen source", PRL:"Parent result link", MOC:"Money ^ charge code", DLD:"Discharge location ^ effective date", AD:"Address", SAD:"Street address", OSD:"Order sequencing", GTS:"General timing text", SN:"Structured number (comparator ^ number ^ separator ^ number)", ED:"Encapsulated data", RP:"Reference pointer", CF:"Coded with formatted text",
+};
+const HL7_TYPES = {
+  CE: defs(`Code|ST
+Description (text)|ST
+Code system|ID|codeSys
+Alternate code|ST
+Alternate description|ST
+Alternate code system|ID|codeSys`),
+  CWE: defs(`Code|ST
+Description (text)|ST
+Code system|ID|codeSys
+Alternate code|ST
+Alternate description|ST
+Alternate code system|ID|codeSys
+Code system version|ST
+Alternate code system version|ST
+Original text|ST`),
+  MSG: defs(`Message type|ID|msgType
+Trigger event|ID|eventCode
+Message structure|ID`),
+  PT: defs(`Processing ID|ID|processing
+Processing mode|ID`),
+  VID: defs(`Version ID|ID|hl7ver
+Internationalization code|CE
+International version ID|CE`),
+  HD: defs(`Namespace ID (short system/site name)|IS
+Universal ID (e.g., OID)|ST
+Universal ID type|ID`),
+  EI: defs(`Entity identifier (the ID itself)|ST
+Namespace ID (system that assigned it)|IS
+Universal ID|ST
+Universal ID type|ID`),
+  EIP: defs(`Placer-assigned identifier|EI
+Filler-assigned identifier|EI`),
+  FN: defs(`Surname|ST
+Own surname prefix|ST
+Own surname|ST
+Surname prefix from partner|ST
+Surname from partner|ST`),
+  XPN: defs(`Family (last) name|FN
+Given (first) name|ST
+Middle name or initial|ST
+Suffix (e.g., JR, III)|ST
+Prefix (e.g., DR, MRS)|ST
+Degree (e.g., MD, PharmD)|IS
+Name type|ID|nameType
+Name representation code|ID
+Name context|CE
+Name validity range|DR
+Name assembly order|ID`),
+  XCN: defs(`ID number|ST
+Family (last) name|FN
+Given (first) name|ST
+Middle name or initial|ST
+Suffix|ST
+Prefix|ST
+Degree (e.g., MD)|IS
+Source table|IS
+Assigning authority|HD
+Name type|ID|nameType
+Identifier check digit|ST
+Check digit scheme|ID
+Identifier type|ID|idType
+Assigning facility|HD`),
+  CX: defs(`ID number|ST
+Check digit|ST
+Check digit scheme|ID
+Assigning authority (who issued the ID)|HD
+Identifier type|ID|idType
+Assigning facility|HD
+Effective date|DT
+Expiration date|DT`),
+  SAD: defs(`Street or mailing address|ST
+Street name|ST
+Dwelling number|ST`),
+  XAD: defs(`Street address|SAD
+Other designation (apt, suite, building)|ST
+City|ST
+State or province|ST
+Zip or postal code|ST
+Country|ID
+Address type|ID|addrType
+Other geographic designation|ST
+County/parish code|IS
+Census tract|IS
+Address representation code|ID
+Address validity range|DR`),
+  AD: defs(`Street address|ST
+Other designation|ST
+City|ST
+State or province|ST
+Zip or postal code|ST
+Country|ID
+Address type|ID|addrType
+Other geographic designation|ST`),
+  XTN: defs(`Telephone number (older free-text format)|ST
+Use code|ID|telUse
+Equipment type|ID|telEquip
+Email address|ST
+Country code|NM
+Area / city code|NM
+Local number|NM
+Extension|NM
+Any text|ST`),
+  PL: defs(`Point of care (nursing unit / department)|IS
+Room|IS
+Bed|IS
+Facility|HD
+Location status|IS
+Person location type|IS
+Building|IS
+Floor|IS
+Location description|ST`),
+  LA1: defs(`Point of care (unit)|IS
+Room|IS
+Bed|IS
+Facility|HD
+Location status|IS
+Person location type|IS
+Building|IS
+Floor|IS
+Address|AD`),
+  LA2: defs(`Point of care (unit)|IS
+Room|IS
+Bed|IS
+Facility|HD
+Location status|IS
+Person location type|IS
+Building|IS
+Floor|IS
+Street address|ST
+Other designation|ST
+City|ST
+State or province|ST
+Zip or postal code|ST
+Country|ID`),
+  TS: defs(`Date/time|DTM
+Degree of precision|ID`),
+  CQ: defs(`Quantity|NM
+Units|CE`),
+  TQ: defs(`Quantity (amount per dose)|CQ
+Interval (how often)|RI
+Duration (how long)|ST
+Start date/time|TS
+End date/time|TS
+Priority|ST|priority
+Condition|ST
+Text instruction|TX
+Conjunction|ST
+Order sequencing|OSD
+Occurrence duration|CE
+Total occurrences|NM`),
+  RI: defs(`Repeat pattern (e.g., Q6H, BID)|IS|freq
+Explicit time interval (e.g., 0800,2000)|ST`),
+  MO: defs(`Amount|NM
+Currency (e.g., USD)|ID`),
+  CP: defs(`Price|MO
+Price type|ID
+From value|NM
+To value|NM
+Range units|CE
+Range type|ID`),
+  DLN: defs(`License number|ST
+Issuing state, province, or country|IS
+Expiration date|DT`),
+  FC: defs(`Financial class code|IS
+Effective date|TS`),
+  DR: defs(`Range start date/time|TS
+Range end date/time|TS`),
+  XON: defs(`Organization name|ST
+Organization name type|IS
+ID number (older format)|NM
+Check digit|NM
+Check digit scheme|ID
+Assigning authority|HD
+Identifier type|ID|idType
+Assigning facility|HD
+Name representation code|ID
+Organization identifier|ST`),
+  RPT: defs(`Repeat pattern code|CWE
+Calendar alignment|ID
+Phase range begin value|NM
+Phase range end value|NM
+Period quantity|NM
+Period units|IS
+Institution specified time|ID
+Event|ID
+Event offset quantity|NM
+Event offset units|IS
+General timing specification|GTS`),
+  ELD: defs(`Segment ID|ST
+Segment sequence|NM
+Field position|NM
+Code identifying error|CE`),
+  ERL: defs(`Segment ID|ST
+Segment sequence|NM
+Field position|NM
+Field repetition|NM
+Component number|NM
+Sub-component number|NM`),
+  AUI: defs(`Authorization number|ST
+Date|DT
+Source|ST`),
+  SPS: defs(`Specimen source name or code|CWE
+Additives|CWE
+Specimen collection method|TX
+Body site|CWE
+Site modifier|CWE
+Collection method modifier code|CWE
+Specimen role|CWE`),
+  PRL: defs(`Parent observation identifier|CE
+Parent observation sub-identifier|ST
+Parent observation value descriptor|TX`),
+  MOC: defs(`Monetary amount|MO
+Charge code|CE`),
+  DLD: defs(`Discharge location|IS
+Effective date|TS`),
+  SN: defs(`Comparator (e.g., > or <)|ST
+First number|NM
+Separator/suffix (e.g., - or :)|ST
+Second number|NM`),
+};
+HL7_TYPES.CNE = HL7_TYPES.CWE;
+
+function S(name, desc, f){ return {name, desc, f:defs(f)}; }
+const HL7S = {
+  MSH: S("Message Header","The envelope: who sent the message, who should receive it, when, what kind of message it is, and which separator characters are used.",`
+Field separator|ST||The character that separates fields (usually |)
+Encoding characters|ST||The characters for parts (^), repeats (~), escape (\\) and sub-parts (&)
+Sending application|HD||The system that created the message (e.g., pharmacy system)
+Sending facility|HD
+Receiving application|HD||The system the message is going to (e.g., cabinet, EHR, billing)
+Receiving facility|HD
+Date/time of message|TS
+Security|ST
+Message type|MSG||What kind of message this is and what triggered it
+Message control ID|ST||Unique ID for this message; acknowledgments (ACK) refer back to it
+Processing ID|PT|processing
+Version ID|VID
+Sequence number|NM
+Continuation pointer|ST
+Accept acknowledgment type|ID|ackType
+Application acknowledgment type|ID|ackType
+Country code|ID
+Character set|ID
+Principal language of message|CE
+Alternate character set handling scheme|ID
+Message profile identifier|EI`),
+  FHS: S("File Header","Start of a file containing one or more batches of HL7 messages.",`
+Field separator|ST
+Encoding characters|ST
+Sending application|HD
+Sending facility|HD
+Receiving application|HD
+Receiving facility|HD
+File creation date/time|TS
+Security|ST
+File name/ID|ST
+File header comment|ST
+File control ID|ST
+Reference file control ID|ST`),
+  BHS: S("Batch Header","Start of a batch (group) of HL7 messages.",`
+Field separator|ST
+Encoding characters|ST
+Sending application|HD
+Sending facility|HD
+Receiving application|HD
+Receiving facility|HD
+Batch creation date/time|TS
+Security|ST
+Batch name/ID/type|ST
+Batch comment|ST
+Batch control ID|ST
+Reference batch control ID|ST`),
+  BTS: S("Batch Trailer","End of a batch; tells how many messages it contained.",`
+Batch message count|NM
+Batch comment|ST
+Batch totals|NM`),
+  FTS: S("File Trailer","End of a file; tells how many batches it contained.",`
+File batch count|NM
+File trailer comment|ST`),
+  SFT: S("Software Segment","Identifies the software that created or handled the message.",`
+Software vendor organization|XON
+Software certified version or release number|ST
+Software product name|ST
+Software binary ID|ST
+Software product information|TX
+Software install date|TS`),
+  EVN: S("Event Type","When and why this event (admit, transfer, update…) happened.",`
+Event type code|ID|eventCode
+Recorded date/time|TS
+Date/time planned event|TS
+Event reason code|IS
+Operator ID (who did it)|XCN
+Event occurred|TS
+Event facility|HD`),
+  PID: S("Patient Identification","Who the patient is: name, medical record number, birth date, sex, address and phone.",`
+Set ID|SI
+Patient ID (older field)|CX
+Patient identifier list (MRN, etc.)|CX||Usually holds the medical record number (MRN)
+Alternate patient ID|CX
+Patient name|XPN
+Mother's maiden name|XPN
+Date/time of birth|TS
+Administrative sex|IS|sex
+Patient alias|XPN
+Race|CE
+Patient address|XAD
+County code|IS
+Phone number – home|XTN
+Phone number – business|XTN
+Primary language|CE
+Marital status|CE|marital
+Religion|CE
+Patient account number|CX||Billing/encounter account number
+SSN number – patient|ST
+Driver's license number – patient|DLN
+Mother's identifier|CX
+Ethnic group|CE
+Birth place|ST
+Multiple birth indicator|ID|yn
+Birth order|NM
+Citizenship|CE
+Veterans military status|CE
+Nationality|CE
+Patient death date and time|TS
+Patient death indicator|ID|yn
+Identity unknown indicator|ID|yn
+Identity reliability code|IS
+Last update date/time|TS
+Last update facility|HD
+Species code|CE
+Breed code|CE
+Strain|ST
+Production class code|CE
+Tribal citizenship|CWE`),
+  PD1: S("Patient Additional Demographics","Extra patient details such as primary care provider and living situation.",`
+Living dependency|IS
+Living arrangement|IS
+Patient primary facility|XON
+Patient primary care provider|XCN
+Student indicator|IS
+Handicap|IS
+Living will code|IS
+Organ donor code|IS
+Separate bill|ID|yn
+Duplicate patient|CX
+Publicity code|CE
+Protection indicator|ID|yn`),
+  NK1: S("Next of Kin / Associated Parties","Emergency contact, family member, guardian or employer.",`
+Set ID|SI
+Name|XPN
+Relationship|CE|relation
+Address|XAD
+Phone number|XTN
+Business phone number|XTN
+Contact role|CE
+Start date|DT
+End date|DT`),
+  PV1: S("Patient Visit","The current visit/encounter: inpatient or outpatient, unit/room/bed, doctors, admit and discharge dates.",`
+Set ID|SI
+Patient class|IS|patClass
+Assigned patient location|PL||Where the patient is now (unit ^ room ^ bed)
+Admission type|IS|admType
+Preadmit number|CX
+Prior patient location|PL
+Attending doctor|XCN
+Referring doctor|XCN
+Consulting doctor|XCN
+Hospital service|IS||e.g., MED, SUR, CAR – site defined
+Temporary location|PL
+Preadmit test indicator|IS
+Re-admission indicator|IS
+Admit source|IS
+Ambulatory status|IS
+VIP indicator|IS
+Admitting doctor|XCN
+Patient type|IS
+Visit number|CX
+Financial class|FC
+Charge price indicator|IS
+Courtesy code|IS
+Credit rating|IS
+Contract code|IS
+Contract effective date|DT
+Contract amount|NM
+Contract period|NM
+Interest code|IS
+Transfer to bad debt code|IS
+Transfer to bad debt date|DT
+Bad debt agency code|IS
+Bad debt transfer amount|NM
+Bad debt recovery amount|NM
+Delete account indicator|IS
+Delete account date|DT
+Discharge disposition|IS
+Discharged to location|DLD
+Diet type|CE
+Servicing facility|IS
+Bed status|IS
+Account status|IS
+Pending location|PL
+Prior temporary location|PL
+Admit date/time|TS
+Discharge date/time|TS
+Current patient balance|NM
+Total charges|NM
+Total adjustments|NM
+Total payments|NM
+Alternate visit ID|CX
+Visit indicator|IS
+Other healthcare provider|XCN`),
+  PV2: S("Patient Visit – Additional Info","Extra visit details: admit reason, expected discharge date, etc.",`
+Prior pending location|PL
+Accommodation code|CE
+Admit reason|CE
+Transfer reason|CE
+Patient valuables|ST
+Patient valuables location|ST
+Visit user code|IS
+Expected admit date/time|TS
+Expected discharge date/time|TS
+Estimated length of inpatient stay (days)|NM
+Actual length of inpatient stay (days)|NM
+Visit description|ST`),
+  AL1: S("Patient Allergy Information","One allergy or adverse reaction for the patient. There is one AL1 per allergy.",`
+Set ID|SI
+Allergen type code|CE|allergyType
+Allergen code / description|CE||What the patient is allergic to
+Allergy severity code|CE|allergySev
+Allergy reaction|ST||e.g., hives, rash, anaphylaxis (can repeat)
+Identification date|DT`),
+  IAM: S("Patient Adverse Reaction Information","Detailed allergy/adverse reaction record (newer than AL1).",`
+Set ID|SI
+Allergen type code|CE|allergyType
+Allergen code / description|CE
+Allergy severity code|CE|allergySev
+Allergy reaction code|ST
+Allergy action code|CNE
+Allergy unique identifier|EI
+Action reason|ST
+Sensitivity to causative agent code|CE
+Allergen group code/description|CE
+Onset date|DT
+Onset date text|ST
+Reported date/time|TS
+Reported by|XPN
+Relationship to patient|CE|relation
+Alert device code|CE
+Allergy clinical status code|CE
+Statused by person|XCN
+Statused by organization|XON
+Statused at date/time|TS`),
+  DG1: S("Diagnosis","One diagnosis (e.g., ICD-10 code) for the patient or visit.",`
+Set ID|SI
+Diagnosis coding method|ID
+Diagnosis code|CE
+Diagnosis description|ST
+Diagnosis date/time|TS
+Diagnosis type|IS|dgType
+Major diagnostic category|CE
+Diagnostic related group (DRG)|CE`),
+  OBX: S("Observation / Result","One result or observation: a lab value, vital sign, weight, height, etc.",`
+Set ID|SI
+Value type|ID|valueType||Tells what kind of data is in OBX-5
+Observation identifier|CE||What was measured (often a LOINC code)
+Observation sub-ID|ST
+Observation value|VARIES||The actual result
+Units|CE
+Reference range|ST||Normal range
+Abnormal flags|IS|abnFlag
+Probability|NM
+Nature of abnormal test|ID
+Observation result status|ID|obsStatus
+Effective date of reference range|TS
+User-defined access checks|ST
+Date/time of the observation|TS
+Producer's ID|CE
+Responsible observer|XCN
+Observation method|CE
+Equipment instance identifier|EI
+Date/time of the analysis|TS`),
+  NTE: S("Notes and Comments","Free-text note or comment attached to the segment above it.",`
+Set ID|SI
+Source of comment|ID|nteSource
+Comment|FT
+Comment type|CE`),
+  ORC: S("Common Order","Order-level information: what action to take on the order (new, cancel, discontinue…), order numbers, who ordered it and when.",`
+Order control|ID|orderControl|What to do with this order
+Placer order number|EI||Order number assigned by the ordering system (e.g., EHR)
+Filler order number|EI||Order number assigned by the system filling it (e.g., pharmacy)
+Placer group number|EI
+Order status|ID|orderStatus
+Response flag|ID
+Quantity/timing|TQ
+Parent order|EIP
+Date/time of transaction|TS
+Entered by|XCN
+Verified by|XCN
+Ordering provider|XCN
+Enterer's location|PL
+Call back phone number|XTN
+Order effective date/time|TS
+Order control code reason|CE
+Entering organization|CE
+Entering device|CE
+Action by|XCN
+Advanced beneficiary notice code|CE
+Ordering facility name|XON
+Ordering facility address|XAD
+Ordering facility phone number|XTN
+Ordering provider address|XAD
+Order status modifier|CWE`),
+  OBR: S("Observation Request","An order for a test or procedure (lab, imaging), and its status.",`
+Set ID|SI
+Placer order number|EI
+Filler order number|EI
+Universal service identifier|CE||The test or procedure ordered
+Priority (old)|ID
+Requested date/time (old)|TS
+Observation date/time|TS
+Observation end date/time|TS
+Collection volume|CQ
+Collector identifier|XCN
+Specimen action code|ID
+Danger code|CE
+Relevant clinical information|ST
+Specimen received date/time|TS
+Specimen source|SPS
+Ordering provider|XCN
+Order callback phone number|XTN
+Placer field 1|ST
+Placer field 2|ST
+Filler field 1|ST
+Filler field 2|ST
+Results report/status change date/time|TS
+Charge to practice|MOC
+Diagnostic service section ID|ID
+Result status|ID|resultStatus
+Parent result|PRL
+Quantity/timing|TQ
+Result copies to|XCN
+Parent|EIP
+Transportation mode|ID
+Reason for study|CE`),
+  RXO: S("Pharmacy/Treatment Order","The medication as originally ordered by the prescriber (before pharmacy verification).",`
+Requested give code|CE||The drug ordered
+Requested give amount – minimum|NM
+Requested give amount – maximum|NM
+Requested give units|CE
+Requested dosage form|CE
+Provider's pharmacy/treatment instructions|CE
+Provider's administration instructions|CE
+Deliver-to location|LA1
+Allow substitutions|ID|subst
+Requested dispense code|CE
+Requested dispense amount|NM
+Requested dispense units|CE
+Number of refills|NM
+Ordering provider's DEA number|XCN
+Pharmacist/treatment supplier's verifier ID|XCN
+Needs human review|ID|yn
+Requested give per (time unit)|ST
+Requested give strength|NM
+Requested give strength units|CE
+Indication|CE
+Requested give rate amount|ST
+Requested give rate units|CE
+Total daily dose|CQ
+Supplementary code|CE`),
+  RXE: S("Pharmacy/Treatment Encoded Order","The medication order as verified by pharmacy: drug, dose, units, form, frequency and dispensing details.",`
+Quantity/timing|TQ||Dose quantity ^ frequency ^ duration ^ start ^ end ^ priority
+Give code|CE||The drug to give (often NDC or internal drug ID)
+Give amount – minimum|NM||The dose (or low end of a dose range)
+Give amount – maximum|NM||High end of a dose range, if any
+Give units|CE||Units of the dose (mg, mL, gram, tab…)
+Give dosage form|CE||e.g., tablet, injection, solution
+Provider's administration instructions|CE
+Deliver-to location|LA1
+Substitution status|ID|subst
+Dispense amount|NM||How much to dispense
+Dispense units|CE
+Number of refills|NM
+Ordering provider's DEA number|XCN
+Pharmacist/treatment supplier's verifier ID|XCN||Pharmacist who verified the order
+Prescription number|ST
+Number of refills remaining|NM
+Number of refills/doses dispensed|NM
+Date/time of most recent refill or dose dispensed|TS
+Total daily dose|CQ
+Needs human review|ID|yn
+Special dispensing instructions|CE
+Give per (time unit)|ST
+Give rate amount|ST||Infusion rate (for IVs)
+Give rate units|CE||e.g., mL/hr
+Give strength|NM
+Give strength units|CE
+Give indication|CE||Why the drug is being given
+Dispense package size|NM
+Dispense package size unit|CE
+Dispense package method|ID|dispMethod
+Supplementary code|CE
+Original order date/time|TS
+Give drug strength volume|NM
+Give drug strength volume units|CWE
+Controlled substance schedule|CWE
+Formulary status|ID
+Pharmaceutical substance alternative|CWE
+Pharmacy of most recent fill|CWE
+Initial dispense amount|NM
+Dispensing pharmacy|CWE
+Dispensing pharmacy address|XAD
+Deliver-to patient location|PL
+Deliver-to address|XAD
+Pharmacy order type|ID|rxOrderType`),
+  RXR: S("Pharmacy/Treatment Route","How the medication is given: route (IV, PO…), site, device and method.",`
+Route|CE|route
+Administration site|CWE
+Administration device|CE
+Administration method|CWE
+Routing instruction|CE
+Administration site modifier|CWE`),
+  RXC: S("Pharmacy/Treatment Component","One ingredient of a compound or IV mixture: either the base solution or an additive.",`
+Component type|ID|rxcType
+Component code|CE||The ingredient
+Component amount|NM
+Component units|CE
+Component strength|NM
+Component strength units|CE
+Supplementary code|CE
+Component drug strength volume|NM
+Component drug strength volume units|CWE`),
+  RXD: S("Pharmacy/Treatment Dispense","What was actually dispensed: drug, quantity, date/time, lot number and expiration.",`
+Dispense sub-ID counter|NM
+Dispense/give code|CE||The drug dispensed
+Date/time dispensed|TS
+Actual dispense amount|NM
+Actual dispense units|CE
+Actual dosage form|CE
+Prescription number|ST
+Number of refills remaining|NM
+Dispense notes|ST
+Dispensing provider|XCN
+Substitution status|ID|subst
+Total daily dose|CQ
+Dispense-to location|LA2
+Needs human review|ID|yn
+Special dispensing instructions|CE
+Actual strength|NM
+Actual strength unit|CE
+Substance lot number|ST
+Substance expiration date|TS
+Substance manufacturer name|CE
+Indication|CE
+Dispense package size|NM
+Dispense package size unit|CE
+Dispense package method|ID|dispMethod
+Supplementary code|CE
+Initiating location|CE
+Packaging/assembly location|CE
+Actual drug strength volume|NM
+Actual drug strength volume units|CWE
+Dispense to pharmacy|CWE
+Dispense to pharmacy address|XAD
+Pharmacy order type|ID|rxOrderType
+Dispense type|CWE`),
+  RXG: S("Pharmacy/Treatment Give","A scheduled dose to be given (used for the medication administration record).",`
+Give sub-ID counter|NM
+Dispense sub-ID counter|NM
+Quantity/timing|TQ
+Give code|CE
+Give amount – minimum|NM
+Give amount – maximum|NM
+Give units|CE
+Give dosage form|CE
+Administration notes|CE
+Substitution status|ID|subst
+Dispense-to location|LA2
+Needs human review|ID|yn
+Special administration instructions|CE
+Give per (time unit)|ST
+Give rate amount|ST
+Give rate units|CE
+Give strength|NM
+Give strength units|CE
+Substance lot number|ST
+Substance expiration date|TS
+Substance manufacturer name|CE
+Indication|CE`),
+  RXA: S("Pharmacy/Treatment Administration","A dose that was actually given (or refused/not given): when, how much, by whom, lot number.",`
+Give sub-ID counter|NM
+Administration sub-ID counter|NM
+Date/time start of administration|TS
+Date/time end of administration|TS
+Administered code|CE||The drug or vaccine given
+Administered amount|NM
+Administered units|CE
+Administered dosage form|CE
+Administration notes|CE
+Administering provider|XCN
+Administered-at location|LA2
+Administered per (time unit)|ST
+Administered strength|NM
+Administered strength units|CE
+Substance lot number|ST
+Substance expiration date|TS
+Substance manufacturer name|CE
+Substance/treatment refusal reason|CE
+Indication|CE
+Completion status|ID|completion
+Action code|ID|actionCode
+System entry date/time|TS`),
+  TQ1: S("Timing/Quantity","When and how often the order should happen (replaces the older TQ field).",`
+Set ID|SI
+Quantity|CQ
+Repeat pattern|RPT
+Explicit time|TM
+Relative time and units|CQ
+Service duration|CQ
+Start date/time|TS
+End date/time|TS
+Priority|CWE|priority
+Condition text|TX
+Text instruction|TX
+Conjunction|ID
+Occurrence duration|CQ
+Total occurrences|NM`),
+  TQ2: S("Timing/Quantity Relationship","Links this order's timing to another order (e.g., give after another dose).",`
+Set ID|SI
+Sequence/results flag|ID
+Related placer number|EI
+Related filler number|EI
+Related placer group number|EI
+Sequence condition code|ID
+Cyclic entry/exit indicator|ID
+Sequence condition time interval|CQ
+Cyclic group maximum number of repeats|NM
+Special service request relationship|ID`),
+  IN1: S("Insurance","One insurance plan for the patient (primary, secondary…).",`
+Set ID|SI
+Insurance plan ID|CE
+Insurance company ID|CX
+Insurance company name|XON
+Insurance company address|XAD
+Insurance company contact person|XPN
+Insurance company phone number|XTN
+Group number|ST
+Group name|XON
+Insured's group employer ID|CX
+Insured's group employer name|XON
+Plan effective date|DT
+Plan expiration date|DT
+Authorization information|AUI
+Plan type|IS
+Name of insured|XPN
+Insured's relationship to patient|CE|relation
+Insured's date of birth|TS
+Insured's address|XAD
+Assignment of benefits|IS
+Coordination of benefits|IS
+Coordination of benefits priority|ST
+Notice of admission flag|ID|yn
+Notice of admission date|DT
+Report of eligibility flag|ID|yn
+Report of eligibility date|DT
+Release information code|IS
+Pre-admit certification|ST
+Verification date/time|TS
+Verification by|XCN
+Type of agreement code|IS
+Billing status|IS
+Lifetime reserve days|NM
+Delay before lifetime reserve day|NM
+Company plan code|IS
+Policy number|ST`),
+  GT1: S("Guarantor","The person or organization responsible for paying the bill.",`
+Set ID|SI
+Guarantor number|CX
+Guarantor name|XPN
+Guarantor spouse name|XPN
+Guarantor address|XAD
+Guarantor phone – home|XTN
+Guarantor phone – business|XTN
+Guarantor date/time of birth|TS
+Guarantor sex|IS|sex
+Guarantor type|IS
+Guarantor relationship|CE|relation
+Guarantor SSN|ST`),
+  MSA: S("Message Acknowledgment","The answer to a message you sent: was it accepted, rejected or did it have errors?",`
+Acknowledgment code|ID|ackCode
+Message control ID|ST||The control ID (MSH-10) of the message being acknowledged
+Text message|ST
+Expected sequence number|NM
+Delayed acknowledgment type|ID
+Error condition|CE`),
+  ERR: S("Error","Details about an error found in a message.",`
+Error code and location|ELD
+Error location|ERL
+HL7 error code|CWE
+Severity (E=error, W=warning, I=information)|ID
+Application error code|CWE
+Application error parameter|ST
+Diagnostic information|TX
+User message|TX`),
+  MRG: S("Merge Patient Information","The OLD identifiers of a patient record being merged into the one in PID.",`
+Prior patient identifier list|CX
+Prior alternate patient ID|CX
+Prior patient account number|CX
+Prior patient ID|CX
+Prior visit number|CX
+Prior alternate visit ID|CX
+Prior patient name|XPN`),
+  FT1: S("Financial Transaction","A charge, credit, payment or adjustment – e.g., a supply or medication charge.",`
+Set ID|SI
+Transaction ID|ST
+Transaction batch ID|ST
+Transaction date|DR
+Transaction posting date|TS
+Transaction type|IS|ftType
+Transaction code|CE||The charge code / chargemaster item
+Transaction description|ST
+Transaction description – alternate|ST
+Transaction quantity|NM
+Transaction amount – extended|CP
+Transaction amount – unit|CP
+Department code|CE
+Insurance plan ID|CE
+Insurance amount|CP
+Assigned patient location|PL
+Fee schedule|IS
+Patient type|IS
+Diagnosis code|CE
+Performed by|XCN
+Ordered by|XCN
+Unit cost|CP
+Filler order number|EI
+Entered by|XCN
+Procedure code|CE
+Procedure code modifier|CE`),
+  MFI: S("Master File Identification","Which master file (e.g., formulary, item master) is being updated.",`
+Master file identifier|CE
+Master file application identifier|HD
+File-level event code|ID|mfiEvent
+Entered date/time|TS
+Effective date/time|TS
+Response level code|ID`),
+  MFE: S("Master File Entry","One record being added, changed or deleted in a master file.",`
+Record-level event code|ID|mfeEvent
+MFN control ID|ST
+Effective date/time|TS
+Primary key value|VARIES
+Primary key value type|ID`),
+  ITM: S("Material Item","Item master record for a supply/material: description, manufacturer, catalog number, chargeable, stocked, latex…",`
+Item identifier|EI
+Item description|ST
+Item status|CWE
+Item type|CWE
+Item category|CWE
+Subject to expiration indicator|CNE|yn
+Manufacturer identifier|EI
+Manufacturer name|ST
+Manufacturer catalog number|ST
+Manufacturer labeler identification code|CWE
+Patient chargeable indicator|CNE|yn
+Transaction code|CWE
+Transaction amount – unit|CP
+Stocked item indicator|CNE|yn
+Supply risk codes|CWE
+Approving regulatory agency|XON
+Latex indicator|CNE|yn
+Ruling act|CWE
+Item natural account code|IS
+Approved to buy quantity|NM
+Approved to buy price|MO
+Taxable item indicator|CNE|yn
+Freight charge indicator|CNE|yn
+Item set indicator|CNE|yn
+Item set identifier|EI
+Track department usage indicator|CNE|yn
+Procedure code|CNE
+Procedure code modifier|CNE
+Special handling code|CWE`),
+  RQD: S("Requisition Detail","One line of a supply requisition: item, quantity, unit of measure, cost center, date needed.",`
+Requisition line number|SI
+Item code – internal|CE
+Item code – external|CE
+Hospital item code|CE
+Requisition quantity|NM
+Requisition unit of measure|CE
+Department cost center|IS
+Item natural account code|IS
+Deliver-to ID|CE
+Date needed|DT`),
+  RQ1: S("Requisition Detail-1","Extra requisition line details: price, manufacturer and vendor catalog numbers.",`
+Anticipated price|ST
+Manufacturer identifier|CE
+Manufacturer's catalog|ST
+Vendor ID|CE
+Vendor catalog|ST
+Taxable|ID|yn
+Substitute allowed|ID|yn`),
+  PR1: S("Procedures","A procedure performed on the patient (used with charges and visits).",`
+Set ID|SI
+Procedure coding method|IS
+Procedure code|CE
+Procedure description|ST
+Procedure date/time|TS
+Procedure functional type|IS
+Procedure minutes|NM
+Anesthesiologist|XCN
+Anesthesia code|IS
+Anesthesia minutes|NM
+Surgeon|XCN
+Procedure practitioner|XCN
+Consent code|CE
+Procedure priority|ID
+Associated diagnosis code|CE
+Procedure code modifier|CE
+Procedure DRG type|IS
+Tissue type code|CE
+Procedure identifier|EI
+Procedure action code|ID|segAction`),
+  SCH: S("Scheduling Activity Information","The appointment itself: IDs, reason, type, length, who requested it and its current status.",`
+Placer appointment ID|EI||The appointment number in the system that asked for it
+Filler appointment ID|EI||The appointment number in the scheduling system
+Occurrence number|NM
+Placer group number|EI
+Schedule ID|CE
+Event reason|CE||Why this message was sent (e.g., booked, rescheduled)
+Appointment reason|CE
+Appointment type|CE
+Appointment duration|NM
+Appointment duration units|CE
+Appointment timing quantity|TQ||Start and end date/time are in parts 4 and 5
+Placer contact person|XCN
+Placer contact phone number|XTN
+Placer contact address|XAD
+Placer contact location|PL
+Filler contact person|XCN
+Filler contact phone number|XTN
+Filler contact address|XAD
+Filler contact location|PL
+Entered by person|XCN
+Entered by phone number|XTN
+Entered by location|PL
+Parent placer appointment ID|EI
+Parent filler appointment ID|EI
+Filler status code|CE|apptStatus|Current status of the appointment
+Placer order number|EI
+Filler order number|EI`),
+  RGS: S("Resource Group","Starts a group of resources (service, staff, location, equipment) needed for the appointment.",`
+Set ID|SI
+Segment action code|ID|segAction
+Resource group ID|CE`),
+  AIS: S("Appointment Information – Service","The service or procedure being scheduled, with its start time and length.",`
+Set ID|SI
+Segment action code|ID|segAction
+Universal service identifier|CE||The service being scheduled (e.g., infusion visit)
+Start date/time|TS
+Start date/time offset|NM
+Start date/time offset units|CE
+Duration|NM
+Duration units|CE
+Allow substitution code|IS|allowSubst
+Filler status code|CE|apptStatus
+Placer supplemental service information|CE
+Filler supplemental service information|CE`),
+  AIG: S("Appointment Information – General Resource","A general resource needed for the appointment, such as equipment (e.g., an infusion pump).",`
+Set ID|SI
+Segment action code|ID|segAction
+Resource ID|CE
+Resource type|CE
+Resource group|CE
+Resource quantity|NM
+Resource quantity units|CE
+Start date/time|TS
+Start date/time offset|NM
+Start date/time offset units|CE
+Duration|NM
+Duration units|CE
+Allow substitution code|IS|allowSubst
+Filler status code|CE|apptStatus`),
+  AIL: S("Appointment Information – Location","Where the appointment takes place (unit, room, chair).",`
+Set ID|SI
+Segment action code|ID|segAction
+Location resource ID|PL
+Location type|CE
+Location group|CE
+Start date/time|TS
+Start date/time offset|NM
+Start date/time offset units|CE
+Duration|NM
+Duration units|CE
+Allow substitution code|IS|allowSubst
+Filler status code|CE|apptStatus`),
+  AIP: S("Appointment Information – Personnel","A person needed for the appointment (e.g., nurse, pharmacist, physician).",`
+Set ID|SI
+Segment action code|ID|segAction
+Personnel resource ID|XCN
+Resource type|CE
+Resource group|CE
+Start date/time|TS
+Start date/time offset|NM
+Start date/time offset units|CE
+Duration|NM
+Duration units|CE
+Allow substitution code|IS|allowSubst
+Filler status code|CE|apptStatus`),
+  STF: S("Staff Identification","A staff member or user record: name, IDs, type, department, active or inactive.",`
+Primary key value|CE||The staff member's main ID in this file
+Staff identifier list|CX||Other IDs for this person (employee number, NPI, login…)
+Staff name|XPN
+Staff type|IS||e.g., RN, RPh, MD, technician
+Administrative sex|IS|sex
+Date/time of birth|TS
+Active/inactive flag|ID|activeFlag
+Department|CE
+Hospital service|CE
+Phone|XTN
+Office/home address/birthplace|XAD
+Institution activation date|DIN
+Institution inactivation date|DIN
+Backup person ID|CE
+E-mail address|ST
+Preferred method of contact|CE
+Marital status|CE
+Job title|ST
+Job code/class|JCC
+Employment status code|CE
+Additional insured on auto|ID|yn
+Driver's license number – staff|DLN
+Copy auto insurance|ID|yn
+Auto insurance expires|DT
+Date last DMV review|DT
+Date next DMV review|DT
+Race|CE
+Ethnic group|CE
+Re-activation approval indicator|ID|yn
+Citizenship|CE
+Death date and time|TS
+Death indicator|ID|yn
+Institution relationship type code|CWE
+Institution relationship period|DR
+Expected return date|DT
+Cost center code|CWE
+Generic classification indicator|ID|yn
+Inactive reason code|CWE`),
+  PRA: S("Practitioner Detail","Extra details for a prescriber or other practitioner: specialty, license and DEA numbers, privileges.",`
+Primary key value|CE
+Practitioner group|CE
+Practitioner category|IS
+Provider billing|ID
+Specialty|SPD
+Practitioner ID numbers|PLN||License, DEA, NPI and similar numbers
+Privileges|PIP
+Date entered practice|DT
+Institution|CE
+Date left practice|DT
+Government reimbursement billing eligibility|CE
+Set ID|SI`),
+  CDM: S("Charge Description Master","One chargeable item in the charge master (CDM): charge code, description, procedure code, active or inactive.",`
+Primary key value|CWE||The charge code
+Charge code alias|CWE
+Charge description short|ST
+Charge description long|ST
+Description override indicator|IS
+Exploding charges|CWE
+Procedure code|CNE||e.g., CPT/HCPCS code billed for this charge
+Active/inactive flag|ID|activeFlag
+Inventory number|CWE
+Resource load|NM
+Contract number|CX
+Contract organization|XON
+Room fee indicator|ID|yn`),
+  PRC: S("Pricing","The price for a charge-master item, optionally by facility, department or patient class.",`
+Primary key value|CWE
+Facility ID|CWE
+Department|CWE
+Valid patient classes|IS|patClass
+Price|CP
+Formula|ST
+Minimum quantity|NM
+Maximum quantity|NM
+Minimum price|MO
+Maximum price|MO
+Effective start date|TS
+Effective end date|TS
+Price override flag|IS
+Billing category|CWE
+Chargeable flag|ID|yn
+Active/inactive flag|ID|activeFlag
+Cost|MO
+Charge on indicator|IS`),
+  IIM: S("Inventory Item Master","Stock details for an inventory item: lot, expiration, location, quantity received and on hand, cost.",`
+Primary key value|CWE||The item's ID in the inventory master
+Service item code|CWE||The product (e.g., NDC)
+Inventory lot number|ST
+Inventory expiration date|TS
+Inventory manufacturer name|CWE
+Inventory location|CWE
+Inventory received date|TS
+Inventory received quantity|NM
+Inventory received quantity unit|CWE
+Inventory received item cost|MO
+Inventory on hand date|TS
+Inventory on hand quantity|NM
+Inventory on hand quantity unit|CWE
+Procedure code|CNE
+Procedure code modifier|CNE`),
+  LOC: S("Location Identification","A location master record: unit, room or department, its type and contact details.",`
+Primary key value|PL
+Location description|ST
+Location type|IS
+Organization name|XON
+Location address|XAD
+Location phone|XTN
+License number|CE
+Location equipment|IS
+Location service code|IS`),
+};
+
+/* ============================================================
+   HL7 parsing
+   ============================================================ */
+function hl7Unescape(s, enc){
+  if(!s || !s.includes(enc.esc)) return s;
+  const e=reEsc(enc.esc);
+  return s.replace(new RegExp(e+"([^"+e+"]*)"+e,"g"),(m,c)=>{
+    switch(c){
+      case "F": return enc.fs; case "S": return enc.comp; case "T": return enc.sub;
+      case "R": return enc.rep; case "E": return enc.esc; case ".br": return "\n";
+      case "H": case "N": return "";
+    }
+    if(/^X[0-9A-Fa-f]+$/.test(c)){ let out=""; for(let i=1;i<c.length;i+=2) out+=String.fromCharCode(parseInt(c.substr(i,2),16)); return out; }
+    if(/^\.(sp|in|ti|ce|fi|nf|sk)/.test(c)) return c===".sp"?"\n":"";
+    return m;
+  });
+}
+
+function parseHL7(text){
+  text=text.replace(/^﻿/,"").replace(/[\x0b\x1c]/g,"\n");
+  // single-line pastes from logs with literal \r or <CR> between segments
+  if(!/[\r\n]/.test(text.trim())) text=text.replace(/(\\r|<CR>|\\n)(?=[A-Z][A-Z0-9]{2}\|)/g,"\n");
+  const lines=text.split(/\r\n|\r|\n/);
+  const docWarn=[];
+  let enc={fs:"|",comp:"^",rep:"~",esc:"\\",sub:"&"};
+  const msgs=[]; let cur=null;
+  const ensure=()=>{ if(!cur){ cur={segs:[],enc:{...enc},warn:[]}; msgs.push(cur); } return cur; };
+  lines.forEach((line,i)=>{
+    const ln=i+1;
+    const t=line.replace(/^[ \t]+/,"");
+    if(!t.trim()){ if(cur) cur.segs.push({blank:true,line:ln}); return; }
+    if(/^(MSH|FHS|BHS)/.test(t) && t.length>=8){
+      const fs=t[3]; const encStr=t.slice(4).split(fs)[0];
+      enc={fs,comp:encStr[0]||"^",rep:encStr[1]||"~",esc:encStr[2]||"\\",sub:encStr[3]||"&"};
+      if(t.startsWith("MSH")||!cur){ cur={segs:[],enc:{...enc},warn:[]}; msgs.push(cur); }
+    }
+    const m=ensure();
+    const id=t.slice(0,3);
+    if(!/^[A-Z][A-Z0-9]{2}$/.test(id) || (t.length>3 && t[3]!==m.enc.fs)){
+      m.segs.push({bad:true,line:ln,raw:t}); return;
+    }
+    const parts=t.split(m.enc.fs);
+    const fields=[];
+    if(/^(MSH|FHS|BHS)$/.test(id)){ fields[1]=m.enc.fs; for(let k=1;k<parts.length;k++) fields[k+1]=parts[k]; }
+    else for(let k=1;k<parts.length;k++) fields[k]=parts[k];
+    m.segs.push({id,line:ln,raw:t,fields});
+  });
+  msgs.forEach(m=>{
+    while(m.segs.length && m.segs[m.segs.length-1].blank) m.segs.pop();
+    if(!m.segs.some(s=>s.id==="MSH") && m.segs.some(s=>s.id&&!/^(FHS|BHS|BTS|FTS)$/.test(s.id))) m.warn.push("No MSH (message header) segment was found, so standard HL7 separators ( | ^ ~ \\ & ) were assumed.");
+    m.segs.forEach(s=>{
+      if(s.blank) m.warn.push(`Line ${s.line} is blank (an empty segment) in the middle of the message. Many systems ignore it, but some reject the message.`);
+      if(s.bad) m.warn.push(`Line ${s.line} doesn't look like an HL7 segment. It may be a wrapped piece of the line above (e.g., from an email or log).`);
+    });
+  });
+  return {kind:"HL7",msgs,warn:docWarn};
+}
+
+function compSplit(raw, sep){ return raw.split(sep); }
+
+/* Build rows for one value (field / repetition / component / subcomponent) */
+function hl7ValueRows(pos, name, type, table, raw, enc, level, fnum, note, ctx){
+  const rows=[];
+  const typeHelp = HL7_TYPE_HELP[type] || (type ? `Data type ${type}` : "");
+  const base={pos,name,expected:typeHelp,type,note,level,f:fnum};
+  if(raw===undefined){ rows.push({...base,status:"absent"}); return rows; }
+  if(raw===""){ rows.push({...base,status:"empty"}); return rows; }
+  if(raw==='""'){ rows.push({...base,status:"null",value:'""'}); return rows; }
+  const childSep = level===0 ? enc.comp : level===1 ? enc.sub : null;
+  const ctypes = HL7_TYPES[type];
+  const parts = childSep ? raw.split(childSep) : [raw];
+  if(parts.length===1 && !(level===0 && ctypes && raw.includes(enc.sub))){
+    const t = ctypes ? ctypes[0].type : type;
+    const tb = ctypes ? (ctypes[0].table||table) : table;
+    const val=hl7Unescape(raw,enc);
+    rows.push({...base,status:"ok",value:val,meaning:hl7Meaning(t,tb,val,ctx)});
+    return rows;
+  }
+  const decoded=hl7Unescape(raw,enc);
+  const self={...base,status:"ok",value:decoded,meaning:hl7Summary(type,table,parts,enc,ctx)};
+  rows.push(self);
+  parts.forEach((p,i)=>{
+    const cd = ctypes ? ctypes[i] : null;
+    const cname = cd ? cd.name : `Part ${i+1}`;
+    const ctype = cd ? cd.type : "";
+    const ctable = (cd && cd.table) || (i===0 ? table : "");
+    rows.push(...hl7ValueRows(`${pos}.${i+1}`, cname, ctype, ctable, p, enc, level+1, fnum, "", ctx));
+  });
+  if(!ctypes && !self.meaning && table) self.meaning=lookup(table, hl7Unescape(parts[0],enc));
+  return rows;
+}
+
+function hl7Meaning(type, table, val, ctx){
+  if(!val) return "";
+  if(table) return lookup(table,val);
+  if(type==="TS"||type==="DTM"||type==="DT") return fmtDT(val);
+  if(type==="TM") return /^\d{4}/.test(val)?fmtTime(val):"";
+  return "";
+}
+
+function firstSub(p, enc){ return hl7Unescape((p||"").split(enc.sub)[0], enc); }
+function hl7Summary(type, table, parts, enc, ctx){
+  const p=i=>firstSub(parts[i],enc);
+  const subs=i=>(parts[i]||"").split(enc.sub).map(x=>hl7Unescape(x,enc));
+  const nm=(last,first,mid,suf,deg)=>[last && (last+(first?",":"")), first, mid, suf].filter(Boolean).join(" ")+(deg?`, ${deg}`:"");
+  switch(type){
+    case "XPN": return nm(p(0),p(1),p(2),p(3),p(5)) + (p(6)?` (${mtext(lookup("nameType",p(6)))})`:"");
+    case "XCN": { const n=nm(p(1),p(2),p(3),p(4),p(6)); return [n, p(0)?`ID ${p(0)}${p(12)?" – "+mtext(lookup("idType",p(12))):""}`:""].filter(Boolean).join(" · "); }
+    case "CE": case "CWE": case "CNE": {
+      const code=p(0), text=p(1), sys=p(2);
+      let s = text || (table && code ? mtext(lookup(table,code)) : "") || "";
+      if(table && code && text){ const l=lookup(table,code); if(typeof l==="string" && l.toLowerCase()!==text.toLowerCase()) s+=` (${l})`; }
+      const bits=[]; if(code) bits.push(`code ${code}`); if(sys) bits.push(mtext(lookup("codeSys",sys)).startsWith('"')?sys:mtext(lookup("codeSys",sys)));
+      return (s? s+" — ":"")+bits.join(", ");
+    }
+    case "CX": return [p(0), p(4)?mtext(lookup("idType",p(4))):"", p(3)?`assigned by ${p(3)}`:""].filter(Boolean).join(" · ");
+    case "XAD": case "AD": { const city=[p(2),[p(3),p(4)].filter(Boolean).join(" ")].filter(Boolean).join(", "); return [p(0),p(1),city,p(5)].filter(Boolean).join(", ")+(p(6)?` (${mtext(lookup("addrType",p(6)))})`:""); }
+    case "PL": case "LA1": case "LA2": return [p(0)&&`Unit ${p(0)}`, p(1)&&`Room ${p(1)}`, p(2)&&`Bed ${p(2)}`, p(3)&&`Facility ${p(3)}`, p(6)&&`Building ${p(6)}`, p(7)&&`Floor ${p(7)}`].filter(Boolean).join(" · ");
+    case "XTN": { if(p(5)||p(6)){ const n=p(6); const nn=n.length===7?n.slice(0,3)+"-"+n.slice(3):n; return `${p(4)?"+"+p(4)+" ":""}${p(5)?"("+p(5)+") ":""}${nn}${p(7)?" ext. "+p(7):""}`+(p(1)?` · ${mtext(lookup("telUse",p(1)))}`:"")+(p(2)?` · ${mtext(lookup("telEquip",p(2)))}`:""); } return p(3)||p(0); }
+    case "HD": return p(0)||p(1);
+    case "EI": return p(0)+(p(1)?` (assigned by ${p(1)})`:"");
+    case "EIP": return [p(0)&&`Placer: ${p(0)}`, p(1)&&`Filler: ${p(1)}`].filter(Boolean).join(" · ");
+    case "MSG": return [mtext(lookup("msgType",p(0))), p(1)?mtext(lookup("eventCode",p(1))):""].filter(Boolean).join(" — ");
+    case "PT": return mtext(lookup("processing",p(0)));
+    case "VID": return p(0)?`HL7 version ${p(0)}`:"";
+    case "TS": return p(0)?fmtDT(p(0)):"";
+    case "CQ": { const u=subs(1); return [p(0), u[1]||u[0]].filter(Boolean).join(" "); }
+    case "TQ": {
+      const q=subs(0), iv=subs(1), bits=[];
+      if(q[0]) bits.push(`${q[0]}${q[1]?" "+q[1]:""} per dose`);
+      if(iv[0]){ const f=T.freq(iv[0]); bits.push(f?`${f} (${iv[0]})`:iv[0]); }
+      if(iv[1]) bits.push(`at ${iv[1]}`);
+      if(p(2)) bits.push(`for ${p(2)}`);
+      if(p(3)){ const d=fmtDT(p(3)); bits.push("starting "+mtext(d)); }
+      if(p(4)){ const d=fmtDT(p(4)); bits.push("ending "+mtext(d)); }
+      if(p(5)) bits.push("priority: "+mtext(lookup("priority",p(5))));
+      if(p(7)) bits.push(`“${p(7)}”`);
+      return bits.join(", ");
+    }
+    case "RI": { const f=T.freq(p(0)); return [f||p(0), p(1)&&`at ${p(1)}`].filter(Boolean).join(" "); }
+    case "MO": return p(0)?`${p(0)} ${p(1)||""}`.trim():"";
+    case "CP": { const m=subs(0); return m[0]?`${m[0]} ${m[1]||""}`.trim():""; }
+    case "DLN": return [p(0), p(1)&&`(${p(1)})`, p(2)&&`expires ${mtext(fmtDT(p(2)))}`].filter(Boolean).join(" ");
+    case "DR": return [p(0)&&mtext(fmtDT(p(0))), p(1)&&mtext(fmtDT(p(1)))].filter(Boolean).join(" to ");
+    case "XON": return p(0)+(p(9)?` (ID ${p(9)})`:"");
+    case "FC": return p(0);
+    case "SN": return parts.map((x,i)=>p(i)).join(" ").replace(/\s+/g," ").trim();
+    case "ERL": return [p(0)&&`Segment ${p(0)}`, p(1)&&`#${p(1)}`, p(2)&&`field ${p(2)}`, p(4)&&`component ${p(4)}`].filter(Boolean).join(", ");
+  }
+  return "";
+}
+
+function hl7SegRows(seg, enc){
+  const def=HL7S[seg.id];
+  const fdefs=def?def.f:[];
+  const n=Math.max(fdefs.length, seg.fields.length-1);
+  const rows=[];
+  for(let k=1;k<=n;k++){
+    const d=fdefs[k-1]||{name:def?`Field ${k} (not in this app's dictionary)`:`Field ${k}`,type:"",table:"",note:""};
+    const pos=`${seg.id}-${k}`;
+    let raw=seg.fields[k];
+    if(/^(MSH|FHS|BHS)$/.test(seg.id) && (k===1||k===2)){
+      const r={pos,name:d.name,expected:"Separator characters",note:d.note,level:0,f:k,status:"ok",value:raw};
+      r.meaning = k===1 ? `Fields are separated by “${raw}”` :
+        `Parts “${enc.comp}”, repeats “${enc.rep}”, escape “${enc.esc}”, sub-parts “${enc.sub}”`;
+      rows.push(r); continue;
+    }
+    let type=d.type;
+    if(type==="VARIES"){
+      const vt = seg.id==="OBX" ? seg.fields[2] : seg.id==="MFE" ? seg.fields[5] : "";
+      if(vt && (HL7_TYPES[vt]||HL7_TYPE_HELP[vt])) type=vt;
+    }
+    if(raw!==undefined && raw!=="" && raw!=='""' && raw.includes(enc.rep)){
+      const reps=raw.split(enc.rep);
+      rows.push({pos,name:d.name,expected:(HL7_TYPE_HELP[type]||"")+" — this field can repeat",type,note:d.note,level:0,f:k,status:"ok",value:hl7Unescape(raw,enc),meaning:`${reps.length} repeated entries (separated by “${enc.rep}”)`});
+      reps.forEach((rp,i)=>{
+        const sub=hl7ValueRows(`${pos} #${i+1}`, `${d.name} — entry ${i+1}`, type, d.table, rp, enc, 0, k, "");
+        sub.forEach(r=>r.level=Math.min(r.level+1,2));
+        rows.push(...sub);
+      });
+    } else rows.push(...hl7ValueRows(pos,d.name,type,d.table,raw,enc,0,k,d.note));
+  }
+  return rows;
+}
+
+function hl7RawHTML(seg, enc){
+  if(seg.bad) return esc(seg.raw);
+  const fs=enc.fs; const parts=seg.raw.split(fs);
+  const isMSH=/^(MSH|FHS|BHS)$/.test(seg.id);
+  let h=`<span class="rid">${esc(parts[0])}</span>`;
+  for(let k=1;k<parts.length;k++){
+    const fn = isMSH ? k+1 : k;
+    h+=`<span class="sep"${isMSH&&k===1?` data-f="1"`:""}>${esc(fs)}</span><span class="c${fn%4}" data-f="${fn}">${esc(parts[k])||""}</span>`;
+  }
+  return h;
+}
+
+function hl7MsgSummary(m){
+  const get=(id,f,c=1,rep=0)=>{ const s=m.segs.find(x=>x.id===id); if(!s) return ""; let v=s.fields[f]||""; if(v==='""') return ""; v=v.split(m.enc.rep)[rep]||""; return hl7Unescape((v.split(m.enc.comp)[c-1]||"").split(m.enc.sub)[0],m.enc); };
+  const getSeg=(s,f)=>s.fields[f]||"";
+  const items=[];
+  const type=get("MSH",9,1), ev=get("MSH",9,2);
+  const tName=type?mtext(lookup("msgType",type)):"HL7 message";
+  const evName=ev?mtext(lookup("eventCode",ev)):"";
+  const knownEv = evName && !evName.startsWith('"');
+  const custom = /^Z/i.test(type) || type==="USR" || type==="REQ" || (type && lookup("msgType",type).unk);
+  const title = custom ? `${type} message (vendor-defined)` : type==="ACK" ? `Acknowledgment${knownEv?` (reply to a “${evName}” message)`:""}` : knownEv ? evName : tName.split(" – ")[0];
+  const code=[type,ev].filter(Boolean).join("^");
+  const add=(k,v)=>{ if(v) items.push([k,v]); };
+  if(type) add("Message type", tName);
+  add("From", [get("MSH",3),get("MSH",4)].filter(Boolean).join(" at "));
+  add("To", [get("MSH",5),get("MSH",6)].filter(Boolean).join(" at "));
+  const dt=get("MSH",7); if(dt) add("Sent", mtext(fmtDT(dt)));
+  add("Message ID", get("MSH",10));
+  const p=get("MSH",11); if(p) add("Mode", mtext(lookup("processing",p)));
+  add("HL7 version", get("MSH",12));
+  const pid=m.segs.find(s=>s.id==="PID");
+  if(pid){
+    const nm=[get("PID",5,1),get("PID",5,2)].filter(Boolean).join(", ")+(get("PID",5,3)?" "+get("PID",5,3):"");
+    add("Patient", nm);
+    add("MRN / patient ID", get("PID",3,1));
+    const dob=get("PID",7); if(dob) add("Date of birth", mtext(fmtDT(dob)));
+    const sx=get("PID",8); if(sx) add("Sex", mtext(lookup("sex",sx)));
+  }
+  const pc=get("PV1",2); if(pc) add("Patient class", mtext(lookup("patClass",pc)));
+  const loc=[get("PV1",3,1),get("PV1",3,2),get("PV1",3,3)].filter(Boolean).join(" / "); if(loc) add("Location (unit / room / bed)", loc);
+  const oc=get("ORC",1); if(oc) add("Order action", `${mtext(lookup("orderControl",oc))} (${oc})`);
+  const drug=get("RXE",2,2)||get("RXO",1,2)||get("RXD",2,2)||get("RXA",5,2)||get("RXE",2,1)||get("RXO",1,1);
+  add("Medication", drug);
+  if(m.segs.some(s=>s.id==="RXE")){
+    const dose=[get("RXE",3),get("RXE",5,2)||get("RXE",5,1)].filter(Boolean).join(" ");
+    const fq=get("RXE",1,2)||get("TQ1",3,1);
+    add("Dose", [dose, fq&&(T.freq(fq)||fq)].filter(Boolean).join(", "));
+  }
+  const rt=get("RXR",1,1); if(rt) add("Route", mtext(lookup("route",rt)));
+  if(m.segs.some(s=>s.id==="RXD")) add("Dispensed", [get("RXD",4), get("RXD",5,2)||get("RXD",5,1)].filter(Boolean).join(" ")+(get("RXD",18)?` · lot ${get("RXD",18)}`:"")+(get("RXD",19)?` · exp ${mtext(fmtDT(get("RXD",19)))}`:""));
+  if(m.segs.some(s=>s.id==="RXA")){
+    const by=[get("RXA",10,3),get("RXA",10,2)].filter(Boolean).join(" ");
+    const t=get("RXA",3);
+    add("Given", [get("RXA",6), get("RXA",7,2)||get("RXA",7,1)].filter(Boolean).join(" ")+(t?` · ${mtext(fmtDT(t))}`:"")+(by?` · by ${by}`:"")+(get("RXA",20)?` · ${mtext(lookup("completion",get("RXA",20)))}`:""));
+  }
+  const al=m.segs.filter(s=>s.id==="AL1").length; if(al) add("Allergies listed", String(al));
+  if(m.segs.some(s=>s.id==="SCH")){
+    add("Appointment", get("AIS",3,2)||get("SCH",7,2)||get("SCH",7,1)||get("AIS",3,1));
+    add("Appointment type", get("SCH",8,2)||get("SCH",8,1));
+    const st=get("AIS",4)||get("AIL",6)||get("AIP",6)||get("SCH",11,4); if(st) add("Starts", mtext(fmtDT(st)));
+    const du=get("SCH",9)||get("AIS",7); if(du) add("Duration", [du, get("SCH",10,2)||get("SCH",10,1)||get("AIS",8,2)].filter(Boolean).join(" "));
+    const ls=get("AIL",3,1); if(ls) add("Where", [ls,get("AIL",3,2)].filter(Boolean).join(" / "));
+    const fs=get("SCH",25); if(fs) add("Appointment status", mtext(lookup("apptStatus",fs)));
+  }
+  const stf=m.segs.filter(s=>s.id==="STF");
+  if(stf.length) add("Staff records", stf.length===1 ? [get("STF",3,1),get("STF",3,2)].filter(Boolean).join(", ")||"1" : String(stf.length));
+  const mfe=m.segs.filter(s=>s.id==="MFE");
+  if(mfe.length) add("Master file", (get("MFI",1,2)||get("MFI",1,1)) + ` · ${mfe.length} record${mfe.length>1?"s":""}`);
+  const ft=m.segs.filter(s=>s.id==="FT1");
+  if(ft.length && type==="DFT") add("Charge lines", String(ft.length));
+  const ack=get("MSA",1); if(ack) add("Acknowledgment", mtext(lookup("ackCode",ack)));
+  const real=m.segs.filter(s=>s.id).length;
+  add("Segments", String(real));
+  return {kind:"HL7", title, code, items};
+}
+
+/* ============================================================
+   X12 dictionary
+   ============================================================ */
+const X12_TYPE_HELP = {
+  AN:"Text (letters, numbers, spaces)", ID:"A code from a standard X12 list", DT:"Date as CCYYMMDD (e.g., 20261027) – ISA uses YYMMDD", TM:"Time as HHMM (24-hour), seconds optional",
+  N0:"Whole number", N2:"Number with 2 implied decimal places (12550 means 125.50)", R:"Number (a decimal point is allowed, e.g., 12.5)", B:"Binary data",
+};
+const X12C = {
+  C001: defs(`Unit or basis for measurement code|ID|uom
+Exponent|R
+Multiplier|R`),
+  C003: defs(`Product/service ID qualifier|ID|procQual
+Procedure code|AN|@
+Procedure modifier 1|AN
+Procedure modifier 2|AN
+Procedure modifier 3|AN
+Procedure modifier 4|AN
+Description|AN
+Product/service ID|AN`),
+  C022: defs(`Code list qualifier|ID|dxQual
+Industry code (e.g., ICD-10 code)|AN|@
+Date time period format qualifier|ID|dtmFmt
+Date time period|AN
+Monetary amount|R
+Quantity|R
+Version identifier|AN
+Industry code|AN
+Present on admission indicator|ID|yesno`),
+  C023: defs(`Facility code value (place of service)|AN|pos
+Facility code qualifier|ID
+Claim frequency type code|ID|freqType`),
+  C030: defs(`Element position in segment|N0
+Component position in composite|N0
+Repeating element position|N0`),
+  C004: defs(`Diagnosis code pointer 1|N0
+Diagnosis code pointer 2|N0
+Diagnosis code pointer 3|N0
+Diagnosis code pointer 4|N0`),
+  C040: defs(`Reference identification qualifier|ID|refQual
+Reference identification|AN|@
+Reference identification qualifier|ID|refQual
+Reference identification|AN|@`),
+  C998: defs(`Context name|AN
+Context reference|AN`),
+};
+function pairs(start, end, qName="Product/service ID qualifier", idName="Product/service ID", tb="prodQual"){
+  let s=""; for(let i=start;i<=end;i+=2) s+=`\n${qName}|ID|${tb}\n${idName}|AN|@`; return s;
+}
+function X(name, desc, f){ return {name, desc, f:defs(f)}; }
+const X12S = {
+  ISA: X("Interchange Control Header","The outer envelope: sender, receiver, date/time, control number, test vs. production, and the separator characters.",`
+Authorization information qualifier|ID|isa01
+Authorization information|AN||Usually blank (spaces)
+Security information qualifier|ID|isa03
+Security information|AN||Usually blank (spaces)
+Interchange ID qualifier (sender)|ID|isaQual|What kind of ID the sender ID is
+Interchange sender ID|AN
+Interchange ID qualifier (receiver)|ID|isaQual
+Interchange receiver ID|AN
+Interchange date|DT
+Interchange time|TM
+Repetition separator (5010) / standards ID (4010)|AN
+Interchange control version number|ID|isa12
+Interchange control number|N0|||Must match IEA-02
+Acknowledgment requested|ID|isa14
+Usage indicator|ID|isa15
+Component element separator|AN`),
+  IEA: X("Interchange Control Trailer","Closes the envelope; must match the ISA control number.",`
+Number of included functional groups|N0
+Interchange control number|N0||Must match ISA-13`),
+  TA1: X("Interchange Acknowledgment","Tells whether the whole interchange (ISA/IEA envelope) was accepted.",`
+Interchange control number|N0
+Interchange date|DT
+Interchange time|TM
+Interchange acknowledgment code|ID|ta104
+Interchange note code|ID`),
+  GS: X("Functional Group Header","Starts a group of transactions of the same type (e.g., all purchase orders).",`
+Functional identifier code|ID|gs01
+Application sender's code|AN
+Application receiver's code|AN
+Date|DT
+Time|TM
+Group control number|N0||Must match GE-02
+Responsible agency code|ID|gs07
+Version / release / industry identifier code|AN||e.g., 004010 or 005010 (healthcare adds X12 guide ID like 005010X222A1)`),
+  GE: X("Functional Group Trailer","Closes the group; counts the transactions and repeats the group control number.",`
+Number of transaction sets included|N0
+Group control number|N0||Must match GS-06`),
+  ST: X("Transaction Set Header","Starts one business document (one PO, one invoice, one ASN…).",`
+Transaction set identifier code|ID|txnSet
+Transaction set control number|AN||Must match SE-02
+Implementation convention reference|AN`),
+  SE: X("Transaction Set Trailer","Ends the document; counts its segments (ST through SE).",`
+Number of included segments|N0||Count of segments from ST to SE, inclusive
+Transaction set control number|AN||Must match ST-02`),
+  BEG: X("Beginning Segment for Purchase Order","Purchase order basics: PO number, date, and type of order.",`
+Transaction set purpose code|ID|purpose
+Purchase order type code|ID|poType
+Purchase order number|AN
+Release number|AN
+Purchase order date|DT
+Contract number|AN
+Acknowledgment type|ID|bak02
+Invoice type code|ID`),
+  CUR: X("Currency","Which currency the amounts are in.",`
+Entity identifier code|ID|entity
+Currency code (e.g., USD)|ID`),
+  REF: X("Reference Identification","An extra reference number, such as department, account, contract, lot or bill of lading number.",`
+Reference identification qualifier|ID|refQual|What kind of number follows
+Reference identification|AN|@
+Description|AN
+Reference identifier|C040`),
+  N9: X("Reference Identification (extended)","A reference number with a longer free-form description, often followed by MSG notes.",`
+Reference identification qualifier|ID|refQual
+Reference identification|AN|@
+Free-form description|AN
+Date|DT
+Time|TM`),
+  MSG: X("Message Text","Free-form note text.",`
+Free-form message text|AN
+Printer carriage control code|ID
+Number|N0`),
+  PER: X("Administrative Communications Contact","A contact person and their phone/fax/email.",`
+Contact function code|ID|perFunc
+Name|AN
+Communication number qualifier|ID|commQual
+Communication number|AN|@
+Communication number qualifier|ID|commQual
+Communication number|AN|@
+Communication number qualifier|ID|commQual
+Communication number|AN|@
+Contact inquiry reference|AN`),
+  DTM: X("Date/Time Reference","A date (and optional time) – the qualifier tells you which date it is (delivery requested, shipped, expiration…).",`
+Date/time qualifier|ID|dtmQual|Which date this is
+Date|DT|@
+Time|TM
+Time code (time zone)|ID
+Date time period format qualifier|ID|dtmFmt
+Date time period|AN`),
+  DMG: X("Demographic Information","Patient/subscriber birth date and gender.",`
+Date time period format qualifier|ID|dtmFmt
+Date of birth|DT
+Gender code|ID|gender`),
+  N1: X("Party Identification","Names a party in the transaction: ship-to, bill-to, vendor, remit-to… N2/N3/N4 that follow belong to it.",`
+Entity identifier code|ID|entity|Who this party is
+Name|AN
+Identification code qualifier|ID|idQual|What kind of ID follows
+Identification code|AN|@`),
+  N2: X("Additional Name Information","More name lines for the party above.",`
+Name|AN
+Name|AN`),
+  N3: X("Party Location (Street Address)","Street address for the party above.",`
+Address line 1|AN
+Address line 2|AN`),
+  N4: X("Geographic Location","City, state, zip and country for the party above.",`
+City name|AN
+State or province code|ID
+Postal (zip) code|ID
+Country code|ID
+Location qualifier|ID
+Location identifier|AN`),
+  NM1: X("Individual or Organizational Name","Names a person or organization (healthcare transactions): patient, subscriber, provider, payer…",`
+Entity identifier code|ID|entity
+Entity type qualifier|ID|nm102
+Last name or organization name|AN
+First name|AN
+Middle name|AN
+Name prefix|AN
+Name suffix|AN
+Identification code qualifier|ID|idQual
+Identification code|AN|@
+Entity relationship code|ID
+Entity identifier code|ID|entity
+Last name or organization name|AN`),
+  FOB: X("F.O.B. Related Instructions","Who pays freight and where ownership transfers.",`
+Shipment method of payment|ID|fob01
+Location qualifier|ID
+Description|AN
+Transportation terms qualifier code|ID
+Transportation terms code|ID
+Location qualifier|ID
+Description|AN`),
+  ITD: X("Terms of Sale","Payment terms (e.g., 2% 10 days, net 30).",`
+Terms type code|ID
+Terms basis date code|ID
+Terms discount percent|R
+Terms discount due date|DT
+Terms discount days due|N0
+Terms net due date|DT
+Terms net days|N0
+Terms discount amount|N2
+Terms deferred due date|DT
+Deferred amount due|N2
+Percent of invoice payable|R
+Description|AN
+Day of month|N0`),
+  TD5: X("Carrier Details (Routing)","Carrier and shipping method.",`
+Routing sequence code|ID
+Identification code qualifier|ID|idQual
+Identification code (carrier SCAC)|AN|@
+Transportation method/type code|ID|transMethod
+Routing (carrier name / service)|AN
+Shipment/order status code|ID
+Location qualifier|ID
+Location identifier|AN
+Transit direction code|ID
+Transit time direction qualifier|ID
+Transit time|R
+Service level code|ID`),
+  TD1: X("Carrier Details (Quantity and Weight)","Number of packages and shipment weight.",`
+Packaging code|AN|td1pkg
+Lading quantity (number of packages)|N0
+Commodity code qualifier|ID
+Commodity code|AN
+Lading description|AN
+Weight qualifier|ID|wtQual
+Weight|R
+Unit of measure|ID|uom
+Volume|R
+Unit of measure|ID|uom`),
+  TD3: X("Carrier Details (Equipment)","Trailer/equipment information.",`
+Equipment description code|ID
+Equipment initial|AN
+Equipment number|AN
+Weight qualifier|ID|wtQual
+Weight|R
+Unit of measure|ID|uom
+Ownership code|ID
+Seal status code|ID
+Seal number|AN`),
+  SCH: X("Line Item Schedule","Delivery schedule for a line: quantity and date.",`
+Quantity|R
+Unit of measure|ID|uom
+Entity identifier code|ID|entity
+Name|AN
+Date/time qualifier|ID|dtmQual
+Date|DT|@
+Time|TM
+Date/time qualifier|ID|dtmQual
+Date|DT|@
+Time|TM
+Request reference number|AN
+Assigned identification|AN`),
+  PO1: X("Purchase Order Line Item","One line on the PO: line number, quantity, unit of measure, unit price, and item/catalog/NDC numbers.",`
+Line number (assigned identification)|AN
+Quantity ordered|R
+Unit of measure|ID|uom
+Unit price|R
+Basis of unit price|ID|priceBasis${pairs(6,25)}`),
+  PO3: X("Additional Item Detail","Extra item detail such as a change reason or price.",`
+Change reason code|ID
+Date|DT
+Price identifier code|ID|ctpPrice
+Unit price|R
+Basis of unit price code|ID|priceBasis
+Quantity|R
+Unit of measure|ID|uom
+Description|AN`),
+  PO4: X("Item Physical Details","Packaging details: how many inner units per pack, size, weight.",`
+Pack (number of inner units per outer pack)|N0
+Size|R
+Unit of measure|ID|uom
+Packaging code|AN|td1pkg
+Weight qualifier|ID|wtQual
+Gross weight per pack|R
+Unit of measure|ID|uom
+Gross volume per pack|R
+Unit of measure|ID|uom
+Length|R
+Width|R
+Height|R
+Unit of measure|ID|uom
+Inner pack|N0`),
+  CTP: X("Pricing Information","A price for the item: contract, catalog, wholesale…",`
+Class of trade code|ID
+Price identifier code|ID|ctpPrice
+Unit price|R
+Quantity|R
+Composite unit of measure|C001
+Price multiplier qualifier|ID
+Multiplier|R
+Monetary amount|R
+Basis of unit price code|ID|priceBasis
+Condition value|AN
+Multiple price quantity|N0`),
+  PID: X("Product/Item Description","A text description of the item on the line above.",`
+Item description type|ID|pidType
+Product/process characteristic code|ID
+Agency qualifier code|ID
+Product description code|AN
+Description|AN||The item description
+Surface/layer/position code|ID
+Source subqualifier|AN
+Yes/no condition or response code|ID|yesno
+Language code|ID`),
+  PKG: X("Marking, Packaging, Loading","Packaging description for the item or shipment.",`
+Item description type|ID|pidType
+Packaging characteristic code|ID
+Agency qualifier code|ID
+Packaging description code|AN
+Description|AN
+Unit load option code|ID`),
+  MEA: X("Measurements","A measurement such as weight or dimension.",`
+Measurement reference ID code|ID
+Measurement qualifier|ID
+Measurement value|R
+Composite unit of measure|C001
+Range minimum|R
+Range maximum|R`),
+  SAC: X("Service, Promotion, Allowance, or Charge","An extra charge (freight, handling) or allowance (discount).",`
+Allowance or charge indicator|ID|sacInd
+Service/promotion/allowance/charge code|ID|sacCode
+Agency qualifier code|ID
+Agency service/promotion/allowance/charge code|AN
+Amount|N2
+Allowance/charge percent qualifier|ID
+Percent|R
+Rate|R
+Unit of measure|ID|uom
+Quantity|R
+Quantity|R
+Allowance or charge method of handling code|ID
+Reference identification|AN
+Option number|AN
+Description|AN
+Language code|ID`),
+  TXI: X("Tax Information","Tax type, amount and percent.",`
+Tax type code|ID
+Monetary amount|R
+Percent|R
+Tax jurisdiction code qualifier|ID
+Tax jurisdiction code|ID
+Tax exempt code|ID
+Relationship code|ID
+Dollar basis for percent|R
+Tax identification number|AN`),
+  AMT: X("Monetary Amount","An amount; the qualifier says which amount it is.",`
+Amount qualifier code|ID|amtQual
+Monetary amount|R|@
+Credit/debit flag code|ID`),
+  CTT: X("Transaction Totals","Totals for the document: number of line items and (optionally) hash total of quantities.",`
+Number of line items|N0||Should equal the number of line segments (PO1, IT1, LIN…)
+Hash total (sum of quantities)|R
+Weight|R
+Unit of measure|ID|uom
+Volume|R
+Unit of measure|ID|uom
+Description|AN`),
+  BAK: X("Beginning Segment for PO Acknowledgment","The vendor's response to your PO: accepted, changed or rejected.",`
+Transaction set purpose code|ID|purpose
+Acknowledgment type|ID|bak02
+Purchase order number|AN
+Purchase order date|DT
+Release number|AN
+Request reference number|AN
+Contract number|AN
+Reference identification (vendor order #)|AN
+Acknowledgment date|DT
+Transaction type code|ID`),
+  ACK: X("Line Item Acknowledgment","The vendor's status for one PO line: accepted, backordered, rejected, changed…",`
+Line item status code|ID|ack01
+Quantity|R
+Unit of measure|ID|uom
+Date/time qualifier|ID|dtmQual
+Date|DT|@
+Request reference number|AN
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Product/service ID qualifier|ID|prodQual
+Product/service ID|AN|@
+Industry code|AN
+Code list qualifier code|ID
+Industry code|AN`),
+  BSN: X("Beginning Segment for Ship Notice","Advance ship notice basics: shipment ID, ship date/time and how the ASN is structured.",`
+Transaction set purpose code|ID|purpose
+Shipment identification (ASN number)|AN
+Date|DT
+Time|TM
+Hierarchical structure code|ID|bsn05
+Transaction type code|ID
+Status reason code|ID`),
+  HL: X("Hierarchical Level","Starts a level in the ASN/claim tree: Shipment → Order → Pack → Item (or payer → provider → subscriber → patient). Segments below belong to this level.",`
+Hierarchical ID number|AN||This level's number
+Hierarchical parent ID number|AN||The level this one belongs to
+Hierarchical level code|ID|hlLevel
+Hierarchical child code|ID|hlChild`),
+  PRF: X("Purchase Order Reference","Which purchase order this part of the shipment/invoice is for.",`
+Purchase order number|AN
+Release number|AN
+Change order sequence number|AN
+Purchase order date|DT
+Assigned identification|AN
+Contract number|AN`),
+  MAN: X("Marks and Numbers","Label numbers on a carton or pallet (e.g., SSCC-18 barcode, tracking number).",`
+Marks and numbers qualifier|ID|manQual
+Marks and numbers|AN|@
+Marks and numbers|AN
+Marks and numbers qualifier|ID|manQual
+Marks and numbers|AN|@
+Marks and numbers|AN`),
+  LIN: X("Item Identification","Identifies the item: line number plus catalog, NDC, GTIN/UPC, lot or serial numbers.",`
+Line number (assigned identification)|AN${pairs(2,31)}`),
+  SN1: X("Item Detail (Shipment)","Quantity shipped for the item.",`
+Line number (assigned identification)|AN
+Number of units shipped|R
+Unit of measure|ID|uom
+Quantity shipped to date|R
+Quantity ordered|R
+Unit of measure|ID|uom
+Returnable container load make-up code|ID
+Line item status code|ID|ack01`),
+  BIG: X("Beginning Segment for Invoice","Invoice basics: invoice number and date, and the PO it bills for.",`
+Invoice date|DT
+Invoice number|AN
+Purchase order date|DT
+Purchase order number|AN
+Release number|AN
+Change order sequence number|AN
+Transaction type code|ID|big07
+Transaction set purpose code|ID|purpose
+Action code|ID
+Invoice number|AN`),
+  IT1: X("Baseline Item Data (Invoice)","One invoice line: quantity billed, unit of measure, unit price, and item numbers.",`
+Line number (assigned identification)|AN
+Quantity invoiced|R
+Unit of measure|ID|uom
+Unit price|R
+Basis of unit price|ID|priceBasis${pairs(6,25)}`),
+  TDS: X("Total Monetary Value Summary","Invoice total. Amounts have 2 implied decimal places (47150 = $471.50).",`
+Total invoice amount|N2
+Amount subject to terms discount|N2
+Discounted amount due|N2
+Terms discount amount|N2`),
+  ISS: X("Invoice Shipment Summary","Shipment totals for the invoice.",`
+Number of units shipped|R
+Unit of measure|ID|uom
+Weight|R
+Unit of measure|ID|uom
+Volume|R
+Unit of measure|ID|uom
+Quantity|R
+Weight|R`),
+  BCT: X("Beginning Segment for Price/Sales Catalog","Starts a price catalog (832): catalog purpose and number.",`
+Catalog purpose code|ID|bct01
+Catalog number|AN
+Catalog version number|AN
+Catalog revision number|AN
+Description|AN
+Description|AN
+Transaction set purpose code|ID|purpose`),
+  BIA: X("Beginning Segment for Inventory Inquiry/Advice","Starts an inventory report (846).",`
+Transaction set purpose code|ID|purpose
+Report type code|ID
+Reference identification|AN
+Date|DT
+Time|TM`),
+  QTY: X("Quantity","A quantity; the qualifier says what kind (on hand, available…).",`
+Quantity qualifier|ID|qtyQual
+Quantity|R|@
+Composite unit of measure|C001
+Free-form information|AN`),
+  BPT: X("Beginning Segment for Product Transfer and Resale","Starts a product transfer/resale report (867).",`
+Transaction set purpose code|ID|purpose
+Reference identification|AN
+Date|DT
+Report type code|ID
+Quantity|R`),
+  AK1: X("Functional Group Response Header","Which functional group (GS) is being acknowledged.",`
+Functional identifier code|ID|gs01
+Group control number|N0||The GS-06 of the group being acknowledged
+Version / release / industry identifier code|AN`),
+  AK2: X("Transaction Set Response Header","Which transaction (ST) is being acknowledged.",`
+Transaction set identifier code|ID|txnSet
+Transaction set control number|AN||The ST-02 of the transaction being acknowledged
+Implementation convention reference|AN`),
+  AK3: X("Data Segment Note","Points to a segment that had an error.",`
+Segment ID code (the bad segment)|ID
+Segment position in transaction set|N0
+Loop identifier code|AN
+Segment syntax error code|ID|ak304`),
+  AK4: X("Data Element Note","Points to an element that had an error.",`
+Position in segment|C030
+Data element reference number|N0
+Data element syntax error code|ID|ak403
+Copy of bad data element|AN`),
+  AK5: X("Transaction Set Response Trailer","Whether the transaction was accepted or rejected.",`
+Transaction set acknowledgment code|ID|ak5
+Syntax error code|ID|ak502
+Syntax error code|ID|ak502
+Syntax error code|ID|ak502
+Syntax error code|ID|ak502
+Syntax error code|ID|ak502`),
+  AK9: X("Functional Group Response Trailer","Overall result for the group: how many transactions were received and accepted.",`
+Functional group acknowledge code|ID|ak5
+Number of transaction sets included|N0
+Number of received transaction sets|N0
+Number of accepted transaction sets|N0
+Functional group syntax error code|ID|ak9err
+Functional group syntax error code|ID|ak9err
+Functional group syntax error code|ID|ak9err
+Functional group syntax error code|ID|ak9err
+Functional group syntax error code|ID|ak9err`),
+  IK3: X("Error Identification (Segment)","Points to a segment that had an error (999).",`
+Segment ID code (the bad segment)|ID
+Segment position in transaction set|N0
+Loop identifier code|AN
+Implementation segment syntax error code|ID|ak304`),
+  IK4: X("Implementation Data Element Note","Points to an element that had an error (999).",`
+Position in segment|C030
+Data element reference number|N0
+Implementation data element syntax error code|ID|ak403
+Copy of bad data element|AN`),
+  IK5: X("Implementation Transaction Set Response Trailer","Whether the transaction was accepted or rejected (999).",`
+Transaction set acknowledgment code|ID|ak5
+Implementation transaction set syntax error code|ID|ak502
+Implementation transaction set syntax error code|ID|ak502
+Implementation transaction set syntax error code|ID|ak502
+Implementation transaction set syntax error code|ID|ak502
+Implementation transaction set syntax error code|ID|ak502`),
+  CTX: X("Context","Extra context about where an error occurred (999).",`
+Context identification|C998
+Segment ID code|ID
+Segment position in transaction set|N0
+Loop identifier code|AN
+Position in segment|C030
+Reference in segment|AN`),
+  BHT: X("Beginning of Hierarchical Transaction","Starts a healthcare transaction (837, 270, 278…): purpose, reference number, date and time.",`
+Hierarchical structure code|ID
+Transaction set purpose code|ID|purpose
+Reference identification|AN
+Date|DT
+Time|TM
+Transaction type code|ID`),
+  SBR: X("Subscriber Information","Insurance subscriber details for a claim.",`
+Payer responsibility sequence|ID|sbr01
+Individual relationship code|ID|indRel
+Group or policy number|AN
+Group name|AN
+Insurance type code|ID
+Coordination of benefits code|ID
+Yes/no condition|ID|yesno
+Employment status code|ID
+Claim filing indicator code|ID`),
+  CLM: X("Claim Information","One healthcare claim: patient account number, total charge, place of service.",`
+Patient control number (claim ID)|AN
+Total claim charge amount|R
+Claim filing indicator code|ID
+Non-institutional claim type code|ID
+Health care service location information|C023
+Provider signature indicator|ID|yesno
+Assignment / plan participation code|ID
+Benefits assignment certification indicator|ID|yesno
+Release of information code|ID
+Patient signature source code|ID
+Related causes information|AN
+Special program code|ID`),
+  HI: X("Health Care Information Codes","Diagnosis or other codes for the claim (each element is one code).",`
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022
+Health care code information|C022`),
+  LX: X("Service Line Number","Starts a claim service line.",`
+Assigned number (line number)|N0`),
+  SV1: X("Professional Service","One professional service line: procedure, charge, units, place of service.",`
+Composite medical procedure identifier|C003
+Line item charge amount|R
+Unit of measure|ID|uom
+Service unit count|R
+Place of service code|AN|pos
+Service type code|ID
+Composite diagnosis code pointer|C004
+Monetary amount|R
+Emergency indicator|ID|yesno`),
+  SV2: X("Institutional Service","One institutional service line: revenue code, procedure, charge, units.",`
+Service line revenue code|AN
+Composite medical procedure identifier|C003
+Line item charge amount|R
+Unit of measure|ID|uom
+Service unit count|R
+Unit rate|R
+Line item denied charge or non-covered charge amount|R`),
+  LIN_RX: null,
+  CTP_RX: null,
+  BPR: X("Financial Information","Payment details for an 835 remittance: amount, method, bank info and payment date.",`
+Transaction handling code|ID
+Total actual provider payment amount|R
+Credit/debit flag code|ID
+Payment method code|ID|bpr04
+Payment format code|ID
+DFI ID number qualifier|ID
+Sender DFI identification number|AN
+Account number qualifier|ID
+Sender bank account number|AN
+Originating company identifier|AN
+Originating company supplemental code|AN
+DFI ID number qualifier|ID
+Receiver DFI identification number|AN
+Account number qualifier|ID
+Receiver bank account number|AN
+Check issue or EFT effective date|DT`),
+  TRN: X("Reassociation Trace Number","Check or EFT trace number used to match payment to remittance.",`
+Trace type code|ID
+Reference identification (check/EFT trace number)|AN
+Originating company identifier|AN
+Reference identification|AN`),
+  CLP: X("Claim Payment Information","How a single claim was paid.",`
+Claim submitter's identifier|AN
+Claim status code|ID|clp02
+Total claim charge amount|R
+Claim payment amount|R
+Patient responsibility amount|R
+Claim filing indicator code|ID
+Payer claim control number|AN
+Facility type code|AN
+Claim frequency type code|ID|freqType`),
+  CAS: X("Claims Adjustment","Why the payment differs from the charge: group code + reason code + amount (can repeat 6 times).",`
+Claim adjustment group code|ID|casGroup
+Adjustment reason code|ID
+Adjustment amount|R
+Adjustment quantity|R
+Adjustment reason code|ID
+Adjustment amount|R
+Adjustment quantity|R
+Adjustment reason code|ID
+Adjustment amount|R
+Adjustment quantity|R
+Adjustment reason code|ID
+Adjustment amount|R
+Adjustment quantity|R
+Adjustment reason code|ID
+Adjustment amount|R
+Adjustment quantity|R
+Adjustment reason code|ID
+Adjustment amount|R
+Adjustment quantity|R`),
+  SVC: X("Service Payment Information","How a single service line was paid.",`
+Composite medical procedure identifier|C003
+Line item charge amount|R
+Line item provider payment amount|R
+National uniform billing committee revenue code|AN
+Units of service paid count|R
+Composite medical procedure identifier|C003
+Original units of service count|R`),
+};
+delete X12S.LIN_RX; delete X12S.CTP_RX;
+
+/* ============================================================
+   X12 parsing
+   ============================================================ */
+function parseX12(text){
+  let t=text.replace(/^﻿/,"").replace(/^\s+/,"");
+  const warn=[];
+  let es="*", ss="~", cs=":", rs=null;
+  if(t.startsWith("ISA")){
+    es=t[3];
+    let count=0,i=3;
+    for(;i<t.length;i++){ if(t[i]===es){ count++; if(count===16) break; } }
+    cs=t[i+1]; ss=t[i+2];
+    if(ss===undefined){ warn.push("The ISA segment seems incomplete."); ss="~"; }
+    const isa=t.slice(0,i+1).split(es);
+    const ver=isa[12]||"";
+    if(ver>="00501" && isa[11] && isa[11].length===1 && isa[11]!=="U" && !/[A-Za-z0-9 ]/.test(isa[11])) rs=isa[11];
+  } else {
+    const m=/^[A-Z][A-Z0-9]{1,2}([^A-Za-z0-9\s])/.exec(t);
+    if(m) es=m[1];
+    ss = t.includes("~") ? "~" : (t.includes("'")&&!t.includes("\n") ? "'" : "\n");
+    warn.push("No ISA (interchange header) was found, so the separators were guessed: elements “"+es+"”, segments “"+(ss==="\n"?"new line":ss)+"”, parts “:”.");
+  }
+  const nl = ss==="\r"||ss==="\n";
+  let pieces;
+  if(nl) pieces=t.split(/\r\n|\r|\n/);
+  else { t=t.replace(/[\r\n]/g,""); pieces=t.split(ss); }
+  if(pieces.length && pieces[pieces.length-1].trim()==="") pieces.pop();
+  const segs=pieces.map((p,i)=>{
+    const raw=p.replace(/^\s+|[\r\n]+$/g,"");
+    if(!raw.trim()) return {blank:true,n:i+1,raw:""};
+    const parts=raw.split(es);
+    const id=parts[0].trim();
+    return {id,n:i+1,raw,parts,bad:!/^[A-Z][A-Z0-9]{1,2}$/.test(id)};
+  });
+  return {kind:"X12",segs,sep:{es,ss,cs,rs},warn};
+}
+
+function x12Meaning(type, table, val, prev){
+  if(val==="") return "";
+  const ps = prev && typeof prev==="string" ? prev : "";
+  if(type==="DT"){ const d=fmtX12Date(val); return (typeof d==="string" && ps) ? `${d} — ${ps}` : d; }
+  if(table==="@") return ps;
+  if(table) return lookup(table,val);
+  if(type==="TM") return /^\d{4}/.test(val)?fmtTime(val):"";
+  if(type==="N2" && /^-?\d+$/.test(val)) return `${(+val/100).toFixed(2)} (the last 2 digits are the decimals)`;
+  return "";
+}
+
+function x12SegRows(seg, sep){
+  const def=X12S[seg.id];
+  const fdefs=def?def.f:[];
+  const n=Math.max(fdefs.length, seg.parts.length-1);
+  const rows=[];
+  let prevMeaning=null, prevDefHadTable=false;
+  for(let k=1;k<=n;k++){
+    const d=fdefs[k-1]||{name:def?`Element ${pad2(k)} (not in this app's dictionary)`:`Element ${pad2(k)}`,type:"",table:"",note:""};
+    const pos=`${seg.id}-${pad2(k)}`;
+    let raw=seg.parts[k];
+    const typeHelp = X12C[d.type] ? "Composite – several parts separated by “"+sep.cs+"”" : (X12_TYPE_HELP[d.type]||"");
+    const base={pos,name:d.name,expected:typeHelp,type:d.type,note:d.note,level:0,f:k};
+    const pm = prevDefHadTable ? prevMeaning : null;
+    if(raw===undefined){ rows.push({...base,status:"absent"}); prevMeaning=null; prevDefHadTable=!!d.table; continue; }
+    // ISA special handling
+    if(seg.id==="ISA"){
+      if(k===16){ rows.push({...base,status:"ok",value:raw,meaning:`Parts inside an element are separated by “${raw}”; segments end with “${sep.ss==="\n"?"new line":sep.ss}”`}); continue; }
+      if(k===11 && sep.rs){ rows.push({...base,status:"ok",value:raw,meaning:`Repeated values inside an element are separated by “${raw}”`}); continue; }
+      const tv=raw.trim();
+      if(!tv){ rows.push({...base,status:"empty",spaces:raw.length>0}); prevMeaning=null; prevDefHadTable=!!d.table; continue; }
+      const r={...base,status:"ok",value:tv,meaning:x12Meaning(d.type,d.table,tv,pm)};
+      if(tv!==raw) r.pad=true;
+      rows.push(r); prevMeaning=r.meaning; prevDefHadTable=!!d.table; continue;
+    }
+    if(raw===""){ rows.push({...base,status:"empty"}); prevMeaning=null; prevDefHadTable=!!d.table; continue; }
+    const comps = (X12C[d.type] || raw.includes(sep.cs)) && sep.cs ? raw.split(sep.cs) : null;
+    if(comps && comps.length>1){
+      const cdefs=X12C[d.type]||[];
+      const r={...base,status:"ok",value:raw,meaning:""};
+      rows.push(r);
+      let pmc=null, pmcTable=false; const ms=[];
+      comps.forEach((c,i)=>{
+        const cd=cdefs[i]||{name:`Part ${i+1}`,type:"",table:""};
+        const cr={pos:`${pos}-${i+1}`,name:cd.name,expected:X12_TYPE_HELP[cd.type]||"",type:cd.type,level:1,f:k};
+        if(c===""){ rows.push({...cr,status:"empty"}); pmc=null; pmcTable=false; return; }
+        const mm=x12Meaning(cd.type,cd.table,c,pmcTable?pmc:null);
+        rows.push({...cr,status:"ok",value:c,meaning:mm}); pmc=mm; pmcTable=!!cd.table&&cd.table!=="@";
+        const t=mtext(mm); if(t && typeof mm==="string" && !ms.includes(t)) ms.push(t);
+      });
+      r.meaning=ms.join(" · ");
+      prevMeaning=null; prevDefHadTable=false; continue;
+    }
+    const mm=x12Meaning(d.type,d.table,raw,pm);
+    rows.push({...base,status:"ok",value:raw,meaning:mm});
+    prevMeaning=mm; prevDefHadTable=!!d.table && d.table!=="@";
+  }
+  // helpful extras
+  if(seg.id==="PO1"||seg.id==="IT1"){
+    const q=parseFloat(seg.parts[2]), p=parseFloat(seg.parts[4]);
+    const r=rows.find(x=>x.pos.endsWith("-04")&&x.status==="ok");
+    if(r && isFinite(q)&&isFinite(p)) r.meaning=`${money(p)} each → line total ${money(q*p)} (${q} × ${money(p)})`;
+  }
+  if(seg.id==="HL"){
+    const r=rows.find(x=>x.pos==="HL-02");
+    if(r && r.status==="empty") r.emptyNote="Top level – no parent";
+  }
+  return rows;
+}
+
+function x12RawHTML(seg, sep){
+  if(seg.blank) return `<span class="sep">${esc(sep.ss==="\n"?"(blank line)":sep.ss)}</span>`;
+  const parts=seg.parts;
+  let h=`<span class="rid">${esc(parts[0])}</span>`;
+  for(let k=1;k<parts.length;k++) h+=`<span class="sep">${esc(sep.es)}</span><span class="c${k%4}" data-f="${k}">${esc(parts[k])}</span>`;
+  if(sep.ss!=="\n"&&sep.ss!=="\r") h+=`<span class="sep">${esc(sep.ss)}</span>`;
+  return h;
+}
+
+/* Walk X12 segments: grouping, context and validation */
+function x12Build(doc){
+  const groups=[]; const sep=doc.sep;
+  let inter=null, grp=null, txn=null, hl=null, line=null, n1=null;
+  const g=(title)=>{ const o={segs:[],warn:[],summary:null}; groups.push(o); return o; };
+  let cur=g();
+  const isaWarn=[];
+  let gsCount=0, stCountInGroup=0;
+  doc.segs.forEach((s,idx)=>{
+    const chips=[];
+    if(s.blank){ cur.segs.push({...s,chips}); cur.warn.push(`Segment #${s.n} is empty (two segment terminators in a row). Most systems skip it, but some reject the file.`); return; }
+    const id=s.id;
+    if(id==="ISA"){ inter={isa:s,gs:0}; }
+    if(id==="GS"){ grp={gs:s,st:0}; if(inter) inter.gs++; }
+    if(id==="ST"){
+      if(cur.segs.length && (cur.txn || cur.segs.some(x=>x.id&&x.id!=="ISA"&&x.id!=="GS"))) cur=g();
+      txn={st:s,count:0,code:s.parts[1]||"",lines:0,lineIds:new Set()}; cur.txn=txn; if(grp) grp.st++;
+      hl=null; line=null; n1=null;
+    }
+    if(txn) txn.count++;
+    // context chips
+    if(id==="HL"){ hl={id:s.parts[1]||"",lvl:s.parts[3]||""}; line=null; n1=null; if(txn) txn.hls=(txn.hls||0)+1; }
+    if(["PO1","IT1","LIN","SLN","LX","CLP","SV1","SV2"].includes(id)){ line=s.parts[1]||"?"; n1=null; if(id==="PO1"||id==="IT1"||id==="LIN") txn&&txn.lines++; }
+    if(id==="CTT"||id==="SE"||id==="TDS") { line=null; }
+    if(id==="N1"||id==="NM1"){ n1=mtext(lookup("entity",s.parts[1]||"")); }
+    if(hl && id!=="HL" && txn) chips.push(`In: ${mtext(lookup("hlLevel",hl.lvl))||"level"} (HL ${hl.id})`);
+    if(line && !["PO1","IT1","LIN","LX","CLP"].includes(id) && txn) chips.push(`Belongs to line ${line}`);
+    if(n1 && ["N2","N3","N4","PER","REF"].includes(id) && !line) chips.push(`For: ${n1}`);
+    const entry={...s,chips,warnChips:[]};
+    cur.segs.push(entry);
+    if(s.bad) cur.warn.push(`Segment #${s.n} (“${s.raw.slice(0,20)}…”) doesn't start with a valid segment ID.`);
+    // validations
+    if(id==="SE" && txn){
+      const se01=parseInt(s.parts[1],10);
+      if(se01!==txn.count){ cur.warn.push(`SE-01 says ${s.parts[1]} segments, but this transaction actually has ${txn.count} (ST through SE).`); entry.warnChips.push("Count mismatch"); }
+      if((s.parts[2]||"")!==(txn.st.parts[2]||"")){ cur.warn.push(`SE-02 control number “${s.parts[2]}” doesn't match ST-02 “${txn.st.parts[2]}”.`); entry.warnChips.push("Control # mismatch"); }
+      txn.closed=true; txn=null; hl=null; line=null;
+    }
+    if(id==="CTT" && txn){
+      const c=parseInt(s.parts[1],10);
+      if(txn.code==="856"){
+        if(isFinite(c) && c!==txn.hls){ cur.warn.push(`CTT-01 says ${c}, but ${txn.hls} HL (hierarchical level) segments were found. In an 856, CTT-01 normally counts HL segments.`); entry.warnChips.push("HL count mismatch"); }
+      } else if(isFinite(c) && txn.lines && c!==txn.lines){ cur.warn.push(`CTT-01 says ${c} line items, but ${txn.lines} line segments (PO1/IT1/LIN) were found.`); entry.warnChips.push("Line count mismatch"); }
+    }
+    if(id==="GE" && grp){
+      if(parseInt(s.parts[1],10)!==grp.st){ cur.warn.push(`GE-01 says ${s.parts[1]} transaction(s), but ${grp.st} were found in this group.`); entry.warnChips.push("Count mismatch"); }
+      if((s.parts[2]||"").trim()!==(grp.gs.parts[6]||"").trim()){ cur.warn.push(`GE-02 “${s.parts[2]}” doesn't match GS-06 “${grp.gs.parts[6]}”.`); entry.warnChips.push("Control # mismatch"); }
+      grp=null;
+    }
+    if(id==="IEA" && inter){
+      if(parseInt(s.parts[1],10)!==inter.gs){ cur.warn.push(`IEA-01 says ${s.parts[1]} group(s), but ${inter.gs} were found.`); entry.warnChips.push("Count mismatch"); }
+      if((s.parts[2]||"").trim()!==(inter.isa.parts[13]||"").trim()){ cur.warn.push(`IEA-02 “${s.parts[2]}” doesn't match ISA-13 “${inter.isa.parts[13]}”.`); entry.warnChips.push("Control # mismatch"); }
+    }
+  });
+  if(txn && !txn.closed) cur.warn.push("This transaction has no SE (trailer) segment – the file may be cut off.");
+  // move trailing GE/IEA into last group naturally (already). Build summaries.
+  const isa=doc.segs.find(s=>s.id==="ISA"), gs=doc.segs.find(s=>s.id==="GS");
+  groups.forEach((G,i)=>{ G.summary=x12Summary(G, i===0?{isa,gs,sep}:null, doc); });
+  if(groups[0]) groups[0].warn.unshift(...doc.warn);
+  return groups;
+}
+
+function x12Summary(G, env, doc){
+  const items=[]; const add=(k,v)=>{ if(v!==undefined&&v!==null&&v!=="") items.push([k,v]); };
+  const f=(id,k)=>{ const s=G.segs.find(x=>x.id===id); return s?((s.parts[k]||"").trim()):""; };
+  const all=(id)=>G.segs.filter(x=>x.id===id);
+  if(env&&env.isa){
+    const I=env.isa.parts.map(x=>(x||"").trim());
+    add("From (sender)", `${I[6]} (${mtext(lookup("isaQual",I[5]))})`);
+    add("To (receiver)", `${I[8]} (${mtext(lookup("isaQual",I[7]))})`);
+    add("Interchange date", `${mtext(fmtX12Date(I[9]))}${I[10]?" at "+fmtTime(I[10]):""}`);
+    add("Interchange control #", I[13]);
+    add("Mode", mtext(lookup("isa15",I[15])));
+    add("Separators", `elements “${env.sep.es}”, segments “${env.sep.ss==="\n"?"new line":env.sep.ss}”, parts “${env.sep.cs}”${env.sep.rs?`, repeats “${env.sep.rs}”`:""}`);
+  }
+  const code=f("ST",1);
+  const title = code ? `${code} ${mtext(lookup("txnSet",code))}` : (env&&env.isa ? "X12 interchange envelope" : "X12 data");
+  add("Transaction control #", f("ST",2));
+  if(code==="850"){
+    add("PO number", f("BEG",3)); const d=f("BEG",5); if(d) add("PO date", mtext(fmtX12Date(d)));
+    add("Order type", f("BEG",2)&&mtext(lookup("poType",f("BEG",2))));
+    add("Purpose", f("BEG",1)&&mtext(lookup("purpose",f("BEG",1))));
+  }
+  if(code==="855"){
+    add("PO number", f("BAK",3)); add("Acknowledgment", f("BAK",2)&&mtext(lookup("bak02",f("BAK",2))));
+    const c={}; all("ACK").forEach(s=>{ const k=mtext(lookup("ack01",s.parts[1]||"")); c[k]=(c[k]||0)+1; });
+    const txt=Object.entries(c).map(([k,v])=>`${v} × ${k}`).join("; "); add("Line statuses", txt);
+  }
+  if(code==="856"){
+    add("Shipment ID (ASN #)", f("BSN",2)); const d=f("BSN",3); if(d) add("Ship notice date", mtext(fmtX12Date(d)));
+    add("PO number(s)", all("PRF").map(s=>s.parts[1]).filter(Boolean).join(", "));
+    add("Carrier", [f("TD5",3),f("TD5",5)].filter(Boolean).join(" – "));
+    const bm=all("REF").find(s=>s.parts[1]==="BM"||s.parts[1]==="CN"); if(bm) add("Tracking / BOL #", bm.parts[2]);
+    add("Packages", f("TD1",2));
+    const lots=all("REF").filter(s=>s.parts[1]==="LT").map(s=>s.parts[2]); if(lots.length) add("Lot numbers", lots.join(", "));
+  }
+  if(code==="810"){
+    add("Invoice number", f("BIG",2)); const d=f("BIG",1); if(d) add("Invoice date", mtext(fmtX12Date(d)));
+    add("PO number", f("BIG",4));
+    const t=f("TDS",1); if(/^-?\d+$/.test(t)) add("Invoice total", money(+t/100));
+  }
+  if(code==="997"||code==="999"){
+    add("Acknowledging group", f("AK1",1)&&`${mtext(lookup("gs01",f("AK1",1)))} – group #${f("AK1",2)}`);
+    const a=f("AK9",1); if(a) add("Result", mtext(lookup("ak5",a)));
+    add("Transactions received / accepted", f("AK9",3)&&`${f("AK9",3)} / ${f("AK9",4)}`);
+  }
+  if(code==="835"){ const t=f("BPR",2); if(t) add("Payment amount", money(+t)); add("Check/EFT #", f("TRN",2)); }
+  if(code==="837"){ add("Claims", String(all("CLM").length)); }
+  const st=G.segs.find(s=>s.id==="N1"&&s.parts[1]==="ST"); if(st) add("Ship to", st.parts[2]);
+  const vn=G.segs.find(s=>s.id==="N1"&&(s.parts[1]==="VN"||s.parts[1]==="SE"||s.parts[1]==="SU")); if(vn) add("Vendor", vn.parts[2]);
+  const lines=G.segs.filter(s=>["PO1","IT1","LIN"].includes(s.id));
+  if(lines.length) add("Line items", String(lines.length));
+  const po1=all("PO1"); if(po1.length){ let tot=0, ok=true; po1.forEach(s=>{ const q=parseFloat(s.parts[2]),p=parseFloat(s.parts[4]); if(isFinite(q)&&isFinite(p)) tot+=q*p; else ok=false; }); add(ok?"Order total (qty × price)":"Order total (lines with prices)", money(tot)); }
+  add("Segments", String(G.segs.filter(s=>!s.blank).length));
+  return {kind:"X12", title, code:"", items};
+}
+
+/* ============================================================
+   Build unified document model
+   ============================================================ */
+function detect(text){
+  const t=text.replace(/^﻿/,"").trimStart();
+  if(/^(MSH|FHS|BHS)./.test(t)) return "HL7";
+  if(/^ISA./.test(t)) return "X12";
+  if(/(^|[\r\n\x0b])MSH\|/.test(t)) return "HL7";
+  if(/^(GS|ST)[*|^~:+]/.test(t)) return "X12";
+  if(/(^|[~\r\n])ISA\*/.test(t)) return "X12";
+  return null;
+}
+
+function buildDoc(text){
+  const kind=detect(text);
+  if(!kind) return {error:"This doesn't look like HL7 or X12. HL7 messages begin with “MSH|” and X12/EDI files begin with “ISA*” (or “GS*” / “ST*”). Check that the whole message was copied."};
+  if(kind==="HL7"){
+    const p=parseHL7(text);
+    const groups=p.msgs.map(m=>{
+      const segs=m.segs.map(s=>{
+        if(s.blank) return {blank:true,label:`Line ${s.line}`,id:"",chips:[]};
+        if(s.bad) return {bad:true,label:`Line ${s.line}`,id:"?",raw:s.raw,chips:[]};
+        return {...s,label:`Line ${s.line}`,chips:[]};
+      });
+      // context chips for HL7: NTE belongs to previous segment
+      let last=null;
+      segs.forEach(s=>{ if(s.id==="NTE"&&last) s.chips.push(`Note about ${last}`); if(s.id&&s.id!=="NTE") last=s.id; });
+      return {kind:"HL7",enc:m.enc,segs,warn:m.warn,summary:hl7MsgSummary(m)};
+    });
+    return {kind,groups};
+  } else {
+    const p=parseX12(text);
+    const groups=x12Build(p);
+    groups.forEach(G=>{ G.kind="X12"; G.sep=p.sep; G.segs.forEach(s=>{ s.label=`Segment #${s.n}`; }); });
+    return {kind,groups,sep:p.sep};
+  }
+}
+
+function segMeta(G, s){
+  if(s.blank) return {name:"Empty segment",desc:"Nothing is in this segment. It is usually harmless, but some receiving systems may reject the message because of it.",cls:"blank"};
+  if(s.bad) return {name:"Unrecognized line",desc:"This line doesn't start with a valid segment ID. It may be a wrapped piece of the previous line, or stray text.",cls:"unknown"};
+  const dict = G.kind==="HL7"?HL7S:X12S;
+  const d=dict[s.id];
+  if(d) return {name:d.name,desc:d.desc,cls:""};
+  if(G.kind==="HL7" && s.id[0]==="Z") return {name:"Custom (Z) segment",desc:"A site-specific segment defined by your facility or vendor – its fields aren't part of the HL7 standard. Ask your interface team or vendor for the spec.",cls:"z"};
+  return {name:"Segment not in this app's dictionary",desc:"This segment is valid but its field definitions aren't built in. Values are still shown by position.",cls:"unknown"};
+}
+
+function segRows(G, s){
+  if(s._rows) return s._rows;
+  if(s.blank||s.bad) return s._rows=[];
+  s._rows = G.kind==="HL7" ? hl7SegRows(s,G.enc) : x12SegRows(s,G.sep);
+  return s._rows;
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+let DOC=null;
+const out=$("#out");
+
+function meaningHTML(m){
+  if(m==null||m==="") return "";
+  if(typeof m==="object") return `<span class="unk">${esc(m.text)}</span>`;
+  return esc(m);
+}
+function valueHTML(r){
+  if(r.status==="empty") return r.spaces?`<span class="pill empty">Blank (spaces only)</span>`:`<span class="pill empty">Empty — nothing sent</span>`;
+  if(r.status==="null") return `<span class="pill null">"" — erase/clear this value</span>`;
+  if(r.status==="absent") return `<span class="pill absent">Not included</span>`;
+  return esc(r.value)+(r.pad?` <span class="pill empty">padded with spaces</span>`:"");
+}
+function rowMeaning(r){
+  if(r.status==="null") return "The sender is telling the receiving system to delete whatever it currently has stored for this field.";
+  if(r.status==="absent") return "";
+  if(r.status==="empty") return r.emptyNote?esc(r.emptyNote):"";
+  return meaningHTML(r.meaning);
+}
+function rowHTML(r){
+  const st=r.status||"ok";
+  return `<tr class="r l${r.level} st-${st}" data-f="${r.f}">
+<td class="pos">${esc(r.pos)}</td>
+<td class="fname"><div class="nm">${esc(r.name)}${r.type?`<span class="tt">[${esc(r.type)}]</span>`:""}</div>${r.expected&&r.level<2?`<div class="exp">Expected: ${esc(r.expected)}</div>`:""}${r.note?`<div class="note">ℹ︎ ${esc(r.note)}</div>`:""}</td>
+<td class="val">${valueHTML(r)}</td>
+<td class="mean">${rowMeaning(r)}</td></tr>`;
+}
+
+function renderBody(det){
+  if(det.dataset.rendered) return;
+  const gi=+det.dataset.g, si=+det.dataset.s;
+  const G=DOC.groups[gi], s=G.segs[si];
+  const body=det.querySelector(".body");
+  if(s.blank||s.bad){ body.innerHTML=`<div class="nodata">${s.blank?"This segment is empty – there is nothing to explain.":"Raw text: "+esc(s.raw)}</div>`; det.dataset.rendered=1; return; }
+  const rows=segRows(G,s);
+  const filled=rows.filter(r=>r.level===0&&r.status==="ok"||r.level===0&&r.status==="null").length;
+  let h="";
+  if(!filled) h+=`<div class="nodata">This segment contains only its ID – no data was sent in any field.</div>`;
+  h+=`<table class="fields"><thead><tr><th>Position</th><th>What this field is</th><th>Value in this message</th><th>What it means</th></tr></thead><tbody>${rows.map(rowHTML).join("")}</tbody></table>`;
+  body.innerHTML=h;
+  det.dataset.rendered=1;
+  applySearchToBody(det);
+}
+
+function render(){
+  const text=$("#input").value;
+  if(!text.trim()){ out.innerHTML=`<div class="empty-state">Paste a message above, or pick a sample, to see every segment and field explained in plain language.</div>`; $("#toolbar").classList.add("hidden"); $("#legendWrap").classList.add("hidden"); DOC=null; return; }
+  const doc=buildDoc(text);
+  if(doc.error){ out.innerHTML=`<div class="panel summary"><div class="notice warn">${esc(doc.error)}</div></div>`; $("#toolbar").classList.add("hidden"); $("#legendWrap").classList.add("hidden"); DOC=null; return; }
+  DOC=doc;
+  $("#toolbar").classList.remove("hidden"); $("#legendWrap").classList.remove("hidden");
+  const total=doc.groups.reduce((a,G)=>a+G.segs.length,0);
+  const autoOpen = total<=40;
+  let h="";
+  doc.groups.forEach((G,gi)=>{
+    const S=G.summary;
+    if(doc.groups.length>1) h+=`<div class="msgsep">${doc.kind==="HL7"?"Message":"Part"} ${gi+1} of ${doc.groups.length}</div>`;
+    h+=`<section class="panel summary"><span class="kind">${G.kind==="HL7"?"HL7 v2 MESSAGE":"X12 / EDI"}</span><h3>${esc(S.title)} ${S.code?`<span class="chip mono">${esc(S.code)}</span>`:""}</h3>`;
+    h+=`<div class="kv">${S.items.map(([k,v])=>`<div><b>${esc(k)}</b>${esc(v)}</div>`).join("")}</div>`;
+    if(G.kind==="HL7") h+=`<div class="notice info">In this message: fields are separated by <b class="mono">${esc(G.enc.fs)}</b>, parts by <b class="mono">${esc(G.enc.comp)}</b>, repeats by <b class="mono">${esc(G.enc.rep)}</b>, sub-parts by <b class="mono">${esc(G.enc.sub)}</b>, and <b class="mono">${esc(G.enc.esc)}</b> starts an escape code.</div>`;
+    if(G.warn.length) h+=`<div class="notice warn"><b>Things to check (${G.warn.length})</b><ul>${G.warn.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`;
+    else if(G.kind==="X12" && G.segs.some(s=>s.id==="SE")) h+=`<div class="notice ok">✓ Segment counts and control numbers match.</div>`;
+    h+=`</section>`;
+    G.segs.forEach((s,si)=>{
+      const meta=segMeta(G,s);
+      const raw = s.blank ? (G.kind==="X12"?x12RawHTML(s,G.sep):"(blank line)") : s.bad ? esc(s.raw) : (G.kind==="HL7"?hl7RawHTML(s,G.enc):x12RawHTML(s,G.sep));
+      const chips=(s.chips||[]).map(c=>`<span class="chip ctx">${esc(c)}</span>`).join("")+(s.warnChips||[]).map(c=>`<span class="chip warn">⚠ ${esc(c)}</span>`).join("");
+      h+=`<details class="seg" data-g="${gi}" data-s="${si}"${autoOpen&&!s.blank?" open":""}><summary>
+<div class="sh"><span class="caret">▶</span><span class="segid ${meta.cls}">${esc(s.blank?"—":s.id)}</span><span class="segname">${esc(meta.name)}</span>${chips}<span class="lineno">${esc(s.label||"")}</span></div>
+<div class="segdesc">${esc(meta.desc)}</div>
+<div class="raw">${raw}</div></summary><div class="body"></div></details>`;
+    });
+  });
+  out.innerHTML=h;
+  out.querySelectorAll("details.seg[open]").forEach(renderBody);
+  applySearch();
+}
+
+/* ---------- search ---------- */
+function segSearchText(G,s){
+  if(s._st) return s._st;
+  const meta=segMeta(G,s);
+  const rows=segRows(G,s);
+  return s._st=[s.id,meta.name,s.raw||"",...rows.map(r=>`${r.pos} ${r.name} ${r.value||""} ${mtext(r.meaning)}`)].join(" ").toLowerCase();
+}
+function applySearchToBody(det){
+  const q=$("#q").value.trim().toLowerCase();
+  det.querySelectorAll("tr.r").forEach(tr=>{
+    tr.classList.toggle("lit", !!q && tr.textContent.toLowerCase().includes(q));
+  });
+}
+function applySearch(){
+  if(!DOC) return;
+  const q=$("#q").value.trim().toLowerCase();
+  out.querySelectorAll("details.seg").forEach(det=>{
+    const G=DOC.groups[+det.dataset.g], s=G.segs[+det.dataset.s];
+    if(!q){ det.classList.remove("hidden"); if(det.dataset.rendered) applySearchToBody(det); return; }
+    const hit=segSearchText(G,s).includes(q);
+    det.classList.toggle("hidden",!hit);
+    if(hit){ det.open=true; renderBody(det); applySearchToBody(det); }
+  });
+}
+
+/* ---------- CSV ---------- */
+function exportCSV(){
+  if(!DOC) return;
+  const lines=[["Part","Location","Segment","Segment name","Position","Field","Value","Meaning","Status"]];
+  DOC.groups.forEach((G,gi)=>{
+    G.segs.forEach(s=>{
+      const meta=segMeta(G,s);
+      if(s.blank||s.bad){ lines.push([gi+1,s.label,s.blank?"(empty)":"?",meta.name,"","",s.raw||"","",s.blank?"empty segment":"unrecognized"]); return; }
+      segRows(G,s).forEach(r=>{
+        const st={ok:"",empty:"empty",null:'explicit null ("")',absent:"not included"}[r.status]||"";
+        if(r.status==="absent") return;
+        lines.push([gi+1,s.label,s.id,meta.name,r.pos,r.name,r.value||"",mtext(r.meaning),st]);
+      });
+    });
+  });
+  const csv=lines.map(l=>l.map(v=>{ v=String(v??""); if(/^[=+\-@]/.test(v)) v="'"+v; return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v; }).join(",")).join("\r\n");
+  const fname=`message-explained-${new Date().toISOString().slice(0,10)}.csv`;
+  // Desktop app: use the native "Save as" dialog
+  if(window.pywebview&&window.pywebview.api&&window.pywebview.api.save_csv){ window.pywebview.api.save_csv("\ufeff"+csv,fname); return; }
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=fname; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+
+/* ============================================================
+   Samples
+   ============================================================ */
+function h7(id,o){ const max=Math.max(...Object.keys(o).map(Number)); const a=[id]; for(let i=1;i<=max;i++) a.push(o[i]??""); return a.join("|"); }
+function x12(gs01,from,to,ctl,sets){
+  const pad=(s,n)=>(s+" ".repeat(n)).slice(0,n);
+  const c9=String(ctl).padStart(9,"0");
+  const out=[`ISA*00*${pad("",10)}*00*${pad("",10)}*ZZ*${pad(from,15)}*ZZ*${pad(to,15)}*261027*0830*^*00501*${c9}*0*P*>`,
+             `GS*${gs01}*${from}*${to}*20261027*0830*${ctl}*X*005010`];
+  sets.forEach(([code,segs],i)=>{ const st=String(i+1).padStart(4,"0"); out.push(`ST*${code}*${st}`,...segs,`SE*${segs.length+2}*${st}`); });
+  out.push(`GE*${sets.length}*${ctl}`,`IEA*1*${c9}`);
+  return out.join("~\n")+"~";
+}
+const SAMPLES={
+  rde:()=>[
+    "MSH|^~\\&|PHARMSYS|GENHOSP|ADC|4WEST|20261027083015||RDE^O11^RDE_O11|MSG00123|P|2.5.1|||AL|NE",
+    h7("PID",{1:"1",3:"12345678^^^GENHOSP^MR",5:"DOE^JANE^A",7:"19560314",8:"F",11:"123 MAIN ST^^SPRINGFIELD^IL^62701^USA^H",13:"^PRN^PH^^1^217^5550100",18:"ACCT998877"}),
+    h7("PV1",{1:"1",2:"I",3:"4WEST^412^B^GENHOSP",7:"1234567890^SMITH^ROBERT^J^^^MD",10:"MED",19:"V445566"}),
+    h7("AL1",{1:"1",2:"DA",3:"70618^PENICILLIN^RXNORM",4:"SV",5:"HIVES~RASH"}),
+    h7("ORC",{1:"NW",2:"ORD445566^EPIC",3:"RX778899^PHARMSYS",5:"IP",9:"20261027080000",12:"1234567890^SMITH^ROBERT^J^^^MD"}),
+    h7("RXE",{1:"1^Q8H^^20261027090000^^R",2:"00409-4888-01^CEFAZOLIN 1 G INJ^NDC",3:"1",5:"G^gram^UCUM",6:"INJ^Injection",8:"4WEST^412^B",9:"N",10:"1",11:"EA^each",12:"0",15:"RX778899",21:'""',30:"UD"}),
+    "RXR|IV^Intravenous^HL70162",
+    h7("TQ1",{1:"1",2:"1^G",3:"Q8H",7:"20261027090000",8:"20261030090000",9:"R"}),
+    "NTE|1|P|Infuse over 30 minutes.\\.br\\Check allergy band before giving."
+  ].join("\r"),
+  rds:()=>[
+    "MSH|^~\\&|PHARMSYS|GENHOSP|BILLING|GENHOSP|20261027101500||RDS^O13^RDS_O13|MSG00124|P|2.5.1",
+    h7("PID",{1:"1",3:"12345678^^^GENHOSP^MR",5:"DOE^JANE^A",7:"19560314",8:"F"}),
+    h7("PV1",{1:"1",2:"I",3:"4WEST^412^B^GENHOSP"}),
+    h7("ORC",{1:"RE",2:"ORD445566^EPIC",3:"RX778899^PHARMSYS",5:"CM"}),
+    h7("RXE",{1:"1^Q8H^^20261027090000^^R",2:"00409-4888-01^CEFAZOLIN 1 G INJ^NDC",3:"1",5:"G^gram^UCUM",6:"INJ^Injection"}),
+    h7("RXD",{1:"1",2:"00409-4888-01^CEFAZOLIN 1 G INJ^NDC",3:"20261027100000",4:"3",5:"EA^each",6:"INJ^Injection",7:"RX778899",18:"LOT4471A",19:"20280131",20:"HOS^Hospira^MVX",24:"UD"}),
+    "RXR|IV^Intravenous^HL70162",
+    "",
+    "ZRX|1|FORMULARY^Y|ADC-4W-02",
+    h7("FT1",{1:"1",4:"20261027",6:"CG",7:"2500123^CEFAZOLIN 1G VIAL^CDM",10:"3",11:"14.25^USD",12:"4.75^USD"})
+  ].join("\r"),
+  ras:()=>[
+    "MSH|^~\\&|EMAR|GENHOSP|PHARMSYS|GENHOSP|20261027091500||RAS^O17^RAS_O17|MSG00125|P|2.5.1",
+    h7("PID",{1:"1",3:"12345678^^^GENHOSP^MR",5:"DOE^JANE^A",7:"19560314",8:"F"}),
+    h7("PV1",{1:"1",2:"I",3:"4WEST^412^B^GENHOSP"}),
+    h7("ORC",{1:"RE",2:"ORD445566^EPIC",3:"RX778899^PHARMSYS",5:"CM"}),
+    h7("RXA",{1:"0",2:"1",3:"20261027090500",4:"20261027091000",5:"00409-4888-01^CEFAZOLIN 1 G INJ^NDC",6:"1",7:"G^gram^UCUM",10:"RN12345^NURSE^NANCY^^^^RN",15:"LOT4471A",16:"20280131",17:"HOS^Hospira^MVX",20:"CP",21:"A"}),
+    "RXR|IV^Intravenous^HL70162|LA^Left arm^HL70163"
+  ].join("\r"),
+  siu:()=>[
+    "MSH|^~\\&|SCHED|GENHOSP|PHARMSYS|GENHOSP|20261027140000||SIU^S12^SIU_S12|MSG00126|P|2.5.1",
+    h7("SCH",{1:"APT1001^EPIC",2:"APT55001^INFUSION",6:"^Scheduled infusion",7:"INF^Infusion therapy",8:"ROUTINE^Routine",9:"120",10:"MIN^minutes",11:"^^120^20261029130000^20261029150000",16:"1234567890^SMITH^ROBERT^J^^^MD",20:"SCHED01^CLERK^SAM",25:"Booked"}),
+    h7("PID",{1:"1",3:"12345678^^^GENHOSP^MR",5:"DOE^JANE^A",7:"19560314",8:"F"}),
+    h7("PV1",{1:"1",2:"O",3:"INFCTR^CHAIR4^^GENHOSP"}),
+    "RGS|1|A",
+    h7("AIS",{1:"1",2:"A",3:"INFUSION^IV infusion visit",4:"20261029130000",7:"120",8:"MIN^minutes",10:"Booked"}),
+    h7("AIG",{1:"1",2:"A",3:"PUMP07^Infusion pump 7",4:"EQUIP^Equipment"}),
+    h7("AIL",{1:"1",2:"A",3:"INFCTR^CHAIR4^^GENHOSP",4:"CHAIR^Infusion chair",6:"20261029130000",9:"120",10:"MIN^minutes",12:"Booked"}),
+    h7("AIP",{1:"1",2:"A",3:"RN12345^NURSE^NANCY^^^^RN",4:"RN^Registered nurse",6:"20261029130000",9:"120",10:"MIN^minutes",12:"Booked"})
+  ].join("\r"),
+  dft:()=>[
+    "MSH|^~\\&|PHARMSYS|GENHOSP|BILLING|GENHOSP|20261027101500||DFT^P03^DFT_P03|MSG00127|P|2.5.1",
+    "EVN|P03|20261027101500",
+    h7("PID",{1:"1",3:"12345678^^^GENHOSP^MR",5:"DOE^JANE^A",7:"19560314",8:"F",18:"ACCT998877"}),
+    h7("PV1",{1:"1",2:"I",3:"4WEST^412^B^GENHOSP",19:"V445566"}),
+    h7("FT1",{1:"1",2:"TXN1001",4:"20261027",6:"CG",7:"2500123^CEFAZOLIN 1G VIAL^CDM",10:"3",11:"14.25^USD",12:"4.75^USD"}),
+    h7("FT1",{1:"2",2:"TXN1002",4:"20261027",6:"CR",7:"2500123^CEFAZOLIN 1G VIAL^CDM",10:"1",11:"4.75^USD",12:"4.75^USD"}),
+    h7("DG1",{1:"1",3:"I50.9^Heart failure, unspecified^I10",6:"A"})
+  ].join("\r"),
+  mfn:()=>[
+    "MSH|^~\\&|PHARMSYS|GENHOSP|ADC|GENHOSP|20261027060000||MFN^M15^MFN_M15|MSG00128|P|2.5.1|||AL|NE",
+    "MFI|IIM^Inventory item master^HL70175|PHARMSYS|UPD|||NE",
+    "MFE|MAD|MF0001|20261027|2500123^CEFAZOLIN 1G VIAL^CDM|CWE",
+    h7("IIM",{1:"2500123^CEFAZOLIN 1G VIAL^CDM",2:"00409-4888-01^CEFAZOLIN 1 G INJ^NDC",3:"LOT4471A",4:"20280131",5:"HOS^Hospira^MVX",6:"MAINPHARM^Main pharmacy",7:"20261020",8:"50",9:"EA^each",10:"4.75^USD",11:"20261027",12:"38",13:"EA^each"})
+  ].join("\r"),
+  adt:()=>[
+    "MSH|^~\\&|ADT1|GENHOSP|PHARMSYS|GENHOSP|20261027074500||ADT^A01^ADT_A01|MSG00001|P|2.5.1",
+    "EVN|A01|20261027074500",
+    h7("PID",{1:"1",3:"12345678^^^GENHOSP^MR~998877665^^^SSA^SS",5:"DOE^JANE^A^^MRS^^L",7:"19560314",8:"F",10:"2106-3^White^CDCREC",11:"123 MAIN ST^APT 4^SPRINGFIELD^IL^62701^USA^H",13:"^PRN^PH^^1^217^5550100",16:"M^Married^HL70002"}),
+    h7("NK1",{1:"1",2:"DOE^JOHN",3:"SPO^Spouse^HL70063",5:"^PRN^PH^^1^217^5550101"}),
+    h7("PV1",{1:"1",2:"I",3:"4WEST^412^B^GENHOSP",4:"E",7:"1234567890^SMITH^ROBERT^J^^^MD",10:"MED",14:"7",17:"1234567890^SMITH^ROBERT^J^^^MD",19:"V445566",44:"20261027074000"}),
+    h7("AL1",{1:"1",2:"DA",3:"70618^PENICILLIN^RXNORM",4:"SV",5:"HIVES~RASH"}),
+    h7("AL1",{1:"2",2:"FA",3:"^SHELLFISH",4:"MO"}),
+    h7("DG1",{1:"1",3:"I50.9^Heart failure, unspecified^I10",6:"A"}),
+    h7("OBX",{1:"1",2:"NM",3:"29463-7^Body weight^LN",5:"72.5",6:"kg^kilogram^UCUM",11:"F",14:"20261027075000"}),
+    h7("IN1",{1:"1",2:"BCBS01^BLUE CROSS PPO",3:"BCBSIL",4:"BLUE CROSS BLUE SHIELD OF IL",8:"GRP5512",16:"DOE^JANE^A",17:"SEL^Self^HL70063",36:"XYZ123456789"})
+  ].join("\r"),
+  "850":()=>x12("PO","GENHOSP","MEDSUPPLYCO",101,[["850",[
+    "BEG*00*SA*PO-2026-55841**20261027","REF*DP*PHARM","PER*BD*PAT JONES*TE*2175550199","DTM*002*20261030",
+    "N1*ST*GENERAL HOSPITAL CENTRAL PHARMACY*91*1001","N3*500 HOSPITAL DR*DOCK 3","N4*SPRINGFIELD*IL*62701",
+    "N1*BT*GENERAL HOSPITAL ACCOUNTS PAYABLE*92*AP01",
+    "PO1*1*10*BX*42.50*PE*VC*3311-20*N4*00409-4888-01","PID*F****CEFAZOLIN 1 G VIAL 25/BX",
+    "PO1*2*5*CA*118.00**VC*88412*UK*00612479145521","PID*F****SYRINGE 10ML LUER LOCK 100/BX",
+    "PO1*3*2*EA*15.75*PE*VC*55120","PID*F****",
+    "CTT*3"]]]),
+  "855":()=>x12("PR","MEDSUPPLYCO","GENHOSP",102,[["855",[
+    "BAK*00*AC*PO-2026-55841*20261027*****20261027",
+    "PO1*1*10*BX*42.50*PE*VC*3311-20*N4*00409-4888-01","ACK*IA*10*BX*068*20261029",
+    "PO1*2*5*CA*118.00**VC*88412","ACK*IB*5*CA*068*20261105",
+    "PO1*3*2*EA*15.75*PE*VC*55120","ACK*R2*0*EA",
+    "CTT*3"]]]),
+  "856":()=>x12("SH","MEDSUPPLYCO","GENHOSP",103,[["856",[
+    "BSN*00*SHP778812*20261029*1400*0001","HL*1**S*1","TD1*CTN25*2****G*14.5*LB","TD5**2*UPSN*U*UPS GROUND",
+    "REF*BM*1Z999AA10123456784","DTM*011*20261029","N1*ST*GENERAL HOSPITAL CENTRAL PHARMACY*91*1001","N1*SF*MED SUPPLY CO DC*91*DC07",
+    "HL*2*1*O*1","PRF*PO-2026-55841***20261027","HL*3*2*P*1","MAN*GM*00012345600000012345",
+    "HL*4*3*I*0","LIN*1*VC*3311-20*N4*00409-4888-01","SN1*1*10*BX","PID*F****CEFAZOLIN 1 G VIAL 25/BX","REF*LT*LOT4471A","DTM*036*20280131",
+    "HL*5*3*I*0","LIN*3*VC*55120","SN1*3*2*EA",
+    "CTT*5"]]]),
+  "810":()=>x12("IN","MEDSUPPLYCO","GENHOSP",104,[["810",[
+    "BIG*20261029*INV-90031*20261027*PO-2026-55841","REF*IA*GH1001","N1*RI*MED SUPPLY CO*91*REMIT01","N3*PO BOX 4400","N4*CHICAGO*IL*60601",
+    "ITD*01*3*2**10**30","DTM*011*20261029",
+    "IT1*1*10*BX*42.50*PE*VC*3311-20*N4*00409-4888-01","PID*F****CEFAZOLIN 1 G VIAL 25/BX",
+    "IT1*3*2*EA*15.75*PE*VC*55120",
+    "TDS*47150","SAC*C*D240***1500","CTT*2"]]]),
+  "997":()=>x12("FA","MEDSUPPLYCO","GENHOSP",105,[["997",["AK1*PO*101","AK2*850*0001","AK5*A","AK9*A*1*1*1"]]]),
+};
+
+/* ============================================================
+   Wiring
+   ============================================================ */
+const input=$("#input");
+let timer=null;
+input.addEventListener("input",()=>{ clearTimeout(timer); timer=setTimeout(render,450); });
+$("#go").onclick=render;
+$("#clear").onclick=()=>{ input.value=""; $("#samples").value=""; render(); input.focus(); };
+$("#samples").onchange=e=>{ const k=e.target.value; if(!k) return; input.value=SAMPLES[k](); render(); };
+$("#open").onclick=()=>$("#file").click();
+function readFile(f){ if(!f) return; const r=new FileReader(); r.onload=()=>{ input.value=r.result; render(); }; r.readAsText(f); }
+$("#file").onchange=e=>{ readFile(e.target.files[0]); e.target.value=""; };
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); input.classList.add("drag"); }));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); if(ev==="drop"||e.target===document.documentElement) input.classList.remove("drag"); }));
+document.addEventListener("drop",e=>{ input.classList.remove("drag"); const f=e.dataTransfer&&e.dataTransfer.files[0]; if(f) readFile(f); });
+
+$("#showEmpty").onchange=e=>out.classList.toggle("hide-empty",!e.target.checked);
+$("#showTech").onchange=e=>out.classList.toggle("tech",e.target.checked);
+$("#q").addEventListener("input",()=>{ clearTimeout(timer); timer=setTimeout(applySearch,200); });
+$("#expand").onclick=()=>out.querySelectorAll("details.seg:not(.hidden)").forEach(d=>{ d.open=true; renderBody(d); });
+$("#collapse").onclick=()=>out.querySelectorAll("details.seg").forEach(d=>d.open=false);
+$("#csv").onclick=exportCSV;
+window.addEventListener("pywebviewready",()=>{ $("#foot").textContent="EDI and HL7 Message Reader · desktop app · works offline"; });
+$("#print").onclick=()=>window.print();
+window.addEventListener("beforeprint",()=>out.querySelectorAll("details.seg:not(.hidden)").forEach(d=>{ d.open=true; renderBody(d); }));
+out.addEventListener("toggle",e=>{ if(e.target.matches&&e.target.matches("details.seg")&&e.target.open) renderBody(e.target); },true);
+
+// link raw text <-> rows
+out.addEventListener("mouseover",e=>{
+  const tr=e.target.closest("tr.r"); const sp=e.target.closest(".raw [data-f]");
+  const det=e.target.closest("details.seg"); if(!det) return;
+  det.querySelectorAll(".lit-h").forEach(x=>x.classList.remove("lit","lit-h"));
+  const f = tr ? tr.dataset.f : sp ? sp.dataset.f : null;
+  if(!f) return;
+  det.querySelectorAll(`.raw [data-f="${f}"]`).forEach(x=>x.classList.add("lit","lit-h"));
+  if(sp) det.querySelectorAll(`tr.r.l0[data-f="${f}"]`).forEach(x=>x.classList.add("lit","lit-h"));
+});
+out.addEventListener("mouseleave",()=>out.querySelectorAll(".lit-h").forEach(x=>x.classList.remove("lit","lit-h")));
+out.addEventListener("click",e=>{
+  const sp=e.target.closest(".raw [data-f]"); if(!sp) return;
+  e.preventDefault();
+  const det=sp.closest("details.seg"); det.open=true; renderBody(det);
+  const tr=det.querySelector(`tr.r.l0[data-f="${sp.dataset.f}"]`);
+  if(tr){ if(getComputedStyle(tr).display==="none"){ $("#showEmpty").checked=true; out.classList.remove("hide-empty"); }
+    tr.scrollIntoView({behavior:"smooth",block:"center"}); tr.classList.add("lit"); setTimeout(()=>tr.classList.remove("lit"),1600); }
+});
+
+// text size + theme
+function store(k,v){ try{ v===undefined?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} }
+function load(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+let fs=parseInt(load("emx-fs")||"17",10);
+const applyFs=()=>{ document.documentElement.style.setProperty("--fs",fs+"px"); store("emx-fs",fs); };
+$("#bigger").onclick=()=>{ fs=Math.min(fs+1,24); applyFs(); };
+$("#smaller").onclick=()=>{ fs=Math.max(fs-1,13); applyFs(); };
+applyFs();
+const th=load("emx-theme"); if(th) document.documentElement.dataset.theme=th;
+$("#theme").onclick=()=>{
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark?"light":"dark"; store("emx-theme",document.documentElement.dataset.theme);
+};
+</script>
+</body>
+</html>
