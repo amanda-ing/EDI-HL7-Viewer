@@ -1,4 +1,4 @@
-# Built apps (rebuild with desktop/build_mac.sh or desktop/build_windows.bat)
+# Built apps (rebuild with app-build/build_mac.sh or app-build/build_windows.bat)
 *.app/
 *.exe
 dist/
